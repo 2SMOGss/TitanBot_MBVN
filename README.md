@@ -1,286 +1,218 @@
-# TitanBot - Ultimate Discord Bot
+# TitanBot MBVN
 
-**TitanBot** is a powerful, feature-rich Discord bot designed to enhance your server experience with comprehensive moderation tools, engaging economy systems, utility features, and much more. Built with modern Discord.js v14 and PostgreSQL for optimal performance and data persistence.
+**TitanBot MBVN** is a modular, production-ready Discord community, moderation, economy, and utility bot built with **Discord.js v14**, **Express 5**, **Lavalink v4 (Riffy)**, and **PostgreSQL 17 (Supabase)**.
 
-[![Support Server](https://img.shields.io/badge/-Support%20Server-%235865F2?logo=discord&logoColor=white&style=flat-square&logoWidth=20)](https://discord.gg/8kJBYhTGW9)
-[![Discord.js](https://img.shields.io/npm/v/discord.js?style=flat-square&labelColor=%23202225&color=%23202225&logo=npm&logoColor=white&logoWidth=20)](https://www.npmjs.com/package/discord.js)
-![PostgreSQL](https://img.shields.io/badge/-PostgreSQL-%23336791?logo=postgresql&logoColor=white&style=flat-square&logoWidth=20)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20.10.0-339933?logo=node.js&logoColor=white&style=flat-square)](https://nodejs.org/)
+[![Discord.js](https://img.shields.io/badge/Discord.js-v14.26-5865F2?logo=discord&logoColor=white&style=flat-square)](https://discord.js.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17%20(Supabase)-336791?logo=postgresql&logoColor=white&style=flat-square)](https://supabase.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+
+---
 
 ## Table of Contents
 
-- [Features Overview](#features-overview)
-- [Quick Setup](#quick-setup)
-- [Manual Installation Steps](#manual-installation-steps)
-- [Support Server](https://discord.gg/QnWNz2dKCE)
-- [Required Bot Intents](#bot-intents)
-- [Contributing](CONTRIBUTING.md)
+1. [Architecture Overview](#architecture-overview)
+2. [Feature Modules (99 Slash Commands)](#feature-modules-99-slash-commands)
+3. [Project Structure](#project-structure)
+4. [24/7 Cloud Deployment (Render + Supabase PostgreSQL)](#247-cloud-deployment-render--supabase-postgresql)
+5. [Local & Docker Development](#local--docker-development)
+6. [Environment Variables Reference](#environment-variables-reference)
+7. [Database Schema, Migrations & Backups](#database-schema-migrations--backups)
+8. [Version Control & Release Workflow](#version-control--release-workflow)
 
-<a name="features-overview"></a>
-## Features Overview
+---
 
-TitanBot offers a complete suite of tools for Discord server management and community engagement:
+## Architecture Overview
 
-<table>
-<tr>
-<td width="50%" valign="top">
+```mermaid
+flowchart LR
+    subgraph Discord["Discord Platform"]
+        GW["Discord Gateway<br/>(WebSocket Intents)"]
+        REST["Discord REST API v10<br/>(99 Global Slash Commands)"]
+    end
 
-### Moderation & Administration
-- **Mass Actions** - Bulk ban/kick capabilities
-- **User Notes** - Keep detailed moderation records
-- **Case Management** - View and track all mod actions
+    subgraph Runtime["TitanBot MBVN (Node 20 Alpine / Non-Root)"]
+        APP["src/app.js<br/>Client + Cron Scheduler"]
+        HTTP["Express Server (:3000)<br/>GET /health & /ready"]
+        KEEP["13.5-Min Keep-Alive<br/>(810,000 ms Timer)"]
+        DBW["DatabaseWrapper<br/>(PostgreSQL -> Memory Fallback)"]
+    end
 
-### Economy System
-- **Shop & Inventory** - Buy and manage items
-- **Gambling** - Risk it for rewards
-- **Pay System** - Transfer money between users
+    subgraph Infra["Managed Cloud Infrastructure"]
+        SUPA[("Supabase PostgreSQL 17<br/>17 RLS-Protected Tables<br/>(Supavisor Pooler)")]
+        LAVA["Lavalink v4 SSL Nodes<br/>(lavalink/nodes.json)"]
+    end
 
-### Fun & Entertainment
-- **Random Facts** - Learn something new
-- **Wanted Poster** - Create fun wanted images
-- **Text Reversal** - Reverse any text
-
-### Advanced Ticket System
-- **Claim & Priority** - Staff ticket management
-- **Ticket Limits** - Prevent spam
-- **Transcript System** - Save ticket history
-
-### Server Stats
-- **Member Counter** - Live member count channels
-- **Voice Counters** - Track voice stats
-- **Dynamic Updates** - Real-time channel updates
-
-### Reaction Roles
-- **Role Assignment** - Self-assignable roles
-- **Emoji Selection** - Reaction-based system
-- **Multi-role Support** - Multiple role options
-
-</td>
-<td width="50%" valign="top">
-
-### Leveling & XP System
-- **XP Tracking** - Automatic message-based XP
-- **Level Roles** - Auto-assign roles by level
-- **Custom Configuration** - Personalize leveling
-
-### Giveaways & Events
-- **Multiple Winners** - Support multi-winner giveaways
-- **Auto Picking** - Automatic winner selection
-- **Reroll System** - Pick new winners if needed
-
-### Birthday System
-- **Birthday Tracking** - Never miss a birthday
-- **Auto Announcements** - Celebrate automatically
-- **Timezone Support** - Accurate worldwide tracking
-
-### Utility Tools
-- **Report System** - Report issues to staff
-- **Todo Lists** - Personal task management
-- **First Message** - Jump to channel's first message
-
-### Welcome System
-- **Welcome Messages** - Greet new members
-- **Auto Roles** - Assign roles on join
-- **Custom Embeds** - Personalized messages
-  
-### Music
-- **24/7 Mode** - Play music 24/7
-- **Interative Button System** - Manage music through buttons
-- **Supports EVERY platform** - Supports spotify, deezer, youtube, apple music
-  
-</td>
-</tr>
-</table>
-
-<a name="quick-setup"></a>
-## Quick Setup (Recommended for non-coders)
-
-### Video Tutorial
-For a detailed step-by-step setup guide, watch our comprehensive video tutorial:
-[**TitanBot Setup Tutorial**](https://www.youtube.com/@TouchDisc)
-
-## Docker Deployment (Recommended)
-
-TitanBot is fully containerized for easy deployment.
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/codebymitch/TitanBot.git
-   cd TitanBot
-   ```
-
-2. **Configure environment variables:**
-   ```bash
-   cp .env.example .env
-   ```
-   Set at minimum `DISCORD_TOKEN`, `CLIENT_ID`, and `GUILD_ID`. Docker Compose also reads `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` from `.env` (defaults: `titanbot` / `password` / `titanbot`).
-
-3. **Build and start the containers:**
-   ```bash
-   docker compose up -d --build
-   ```
-
-4. **Check status:**
-   ```bash
-   docker compose ps
-   curl http://localhost:3000/health
-   ```
-
-This starts the bot and PostgreSQL. The compose file sets `POSTGRES_SSL=false` and `AUTO_MIGRATE=true` for the bundled database. Music uses public Lavalink v4 nodes from `lavalink/nodes.json` by default.
-
-### Music
-
-Music uses [Lavalink v4](https://github.com/lavalink-devs/Lavalink) via [Riffy](https://github.com/riffy-rb/riffy), similar to [Musicify](https://github.com/codebymitch/Musicify).
-
-1. By default, the bot loads multiple public v4 SSL nodes from [`lavalink/nodes.json`](lavalink/nodes.json) (sourced from [lavalink.darrennathanael.com](https://lavalink.darrennathanael.com/SSL/Lavalink-SSL/)). Edit that file to add or remove nodes.
-2. To self-host Lavalink instead, run `docker compose --profile local-lavalink up -d` and set single-node env vars in `.env`:
-   ```env
-   LAVALINK_HOST=lavalink
-   LAVALINK_PORT=2333
-   LAVALINK_PASSWORD=youshallnotpass
-   LAVALINK_SECURE=false
-   ```
-   Remove or rename `lavalink/nodes.json` so the bot falls back to those env vars.
-3. Override nodes inline with `LAVALINK_NODES` (JSON array) or point at another file with `LAVALINK_NODES_FILE`.
-4. Use `/play <song>` from a voice channel, or `/join` to connect without playing. Prefix shortcuts: `join`, `np`, `leave`, `pause`, `resume`, `skip`, `stop`, `volume <0-100>`, or `music <subcommand>`. Use `/nowplaying` and `/queue` for status; `/music` for loop, shuffle, seek, and other controls.
-
-### Using GitHub Container Registry
-
-The bot is automatically published to GitHub Container Registry on every push to main.
-
-```bash
-docker pull ghcr.io/codebymitch/titanbot:main
+    GW <--> APP
+    APP --> REST
+    APP --> HTTP
+    KEEP -->|"HTTPS GET /health"| HTTP
+    APP --> DBW
+    DBW <-->|"TLS Pool"| SUPA
+    APP <-->|"Riffy v4"| LAVA
 ```
 
-<a name="manual-installation-steps"></a>
-## Manual Installation Steps
+- **Multi-Guild Isolation**: Every server's configuration, economy, leveling, tickets, and moderation records are scoped by `guild_id` (`guild:{guildId}:...`).
+- **Graceful Degradation**: If PostgreSQL is temporarily unreachable, `DatabaseWrapper` falls back to in-memory storage and surfaces degraded status on `GET /ready` (`HTTP 503`).
+- **Built-in 13.5-Minute Keep-Alive**: Automatically pings `KEEP_ALIVE_URL` / `RENDER_EXTERNAL_URL` every `810,000 ms` (13.5 minutes) so free cloud web service containers never hit 15-minute idle spin-down limits.
 
-### Prerequisites
-- Node.js 20.10.0 or higher
-- PostgreSQL server (recommended) or memory storage fallback
-- Discord bot application with proper intents
+---
 
-1. **Clone the Repository**
+## Feature Modules (99 Slash Commands)
+
+| Category | Key Capabilities |
+| :--- | :--- |
+| **Moderation & Logging** | Ban, kick, timeout, warn, mass actions, user notes, case management, and configurable audit log dashboards (`/logging`). |
+| **Support Tickets** | Interactive ticket panels, staff claiming, priority levels (`low` to `urgent`), per-user open limits, transcripts, and archiving. |
+| **Verification** | Button-based member verification panels, account-age gates, rate limiting, and persistent `verification_audit` logging. |
+| **Economy & Shop** | Per-server balances, bank storage, daily rewards, work/beg/crime/rob commands, customizable shop items, and leaderboards. |
+| **Leveling & XP** | Message XP tracking with cooldowns, level-up announcements, milestone role rewards, and server rank leaderboards. |
+| **Community & Applications** | Multi-question application modals, staff review buttons (Approve/Deny), role assignment, and automatic retention cleanup. |
+| **Giveaways & Birthdays** | Multi-winner giveaways with automatic cron completion/rerolls, plus timezone-aware daily birthday announcements. |
+| **Voice & Music** | Dynamic Join-to-Create temporary voice channels and 24/7 Lavalink v4 music playback (`/play`, `/music`, `/queue`, `/nowplaying`). |
+| **Server Stats & Roles** | Auto-updating member/bot/human voice counter channels (every 15 min) and interactive Reaction Role panels. |
+
+> Global feature toggles, embed colors, currency settings, and cooldowns can be customized in [`src/config/bot.js`](src/config/bot.js).
+
+---
+
+## Project Structure
+
+```text
+TitanBot_MBVN/
+├── .github/workflows/       # CI/CD: Docker GHCR publish, schema version check, restore drill
+├── lavalink/                # Public Lavalink v4 SSL node list (nodes.json) & self-host config
+├── scripts/                 # Database CLI utilities (migrate.js, backup.js, restore.js, restore-drill.js)
+├── src/
+│   ├── app.js               # Main process entry point, Express health server, and cron scheduler
+│   ├── commands/            # 18 modular slash command categories (99 commands total)
+│   ├── config/              # Bot settings (bot.js), Postgres pool config, and schema version
+│   ├── events/              # Discord Gateway event listeners
+│   ├── handlers/            # Command, event, and component interaction loaders
+│   ├── interactions/        # Button, select menu, and modal handlers
+│   ├── services/            # Domain logic (tickets, giveaways, birthdays, server stats, music)
+│   └── utils/               # DatabaseWrapper, PostgreSQL driver, schema DDL, logger, error handler
+├── .env.example             # Environment variable template
+├── CHANGELOG.md             # Semantic versioning release notes
+├── Dockerfile               # Hardened non-root Node 20 Alpine production image
+├── docker-compose.yml       # Local multi-container stack (Bot + PostgreSQL 15 + optional Lavalink)
+├── render.yaml              # Render.com Free Web Service Blueprint
+└── package.json             # Dependencies and npm scripts
+```
+
+---
+
+## 24/7 Cloud Deployment (Render + Supabase PostgreSQL)
+
+### 1. Required Discord Bot Settings
+In the [Discord Developer Portal](https://discord.com/developers/applications):
+1. Copy **Application ID** (`CLIENT_ID`) from **General Information**.
+2. Copy **Bot Token** (`DISCORD_TOKEN`) from **Bot**, and enable all three **Privileged Gateway Intents**:
+   - **Presence Intent**
+   - **Server Members Intent**
+   - **Message Content Intent**
+3. Under **OAuth2 → URL Generator**, select `bot` + `applications.commands` scopes and `Administrator` permissions to invite the bot to your server.
+
+### 2. Deploy via Render Blueprint
+1. Click **[Deploy to Render](https://dashboard.render.com/blueprint/new?repo=https://github.com/2SMOGss/TitanBot_MBVN)**.
+2. Supply the prompted secret environment variables:
+   - `DISCORD_TOKEN`
+   - `CLIENT_ID`
+   - `GUILD_ID`
+   - `POSTGRES_URL` *(Supabase Session Pooler URI)*
+   - `DATABASE_URL` *(Same as `POSTGRES_URL`)*
+3. Verify deployment status:
+   - Health check: `https://titanbot-mbvn.onrender.com/health`
+   - Readiness & schema check: `https://titanbot-mbvn.onrender.com/ready`
+
+---
+
+## Local & Docker Development
+
+### Option A: Local Node.js
+```bash
+# 1. Install dependencies
+npm ci
+
+# 2. Configure environment variables
+cp .env.example .env
+
+# 3. Verify PostgreSQL schema (v1 / baseline-v1)
+npm run migrate:check
+
+# 4. Start the bot
+npm start
+```
+
+### Option B: Docker Compose (Bundled PostgreSQL 15)
+```bash
+cp .env.example .env
+# Edit .env with DISCORD_TOKEN, CLIENT_ID, GUILD_ID, and POSTGRES_PASSWORD
+docker compose up -d --build
+docker compose logs -f bot
+```
+
+---
+
+## Environment Variables Reference
+
+| Variable | Required | Default | Description |
+| :--- | :---: | :--- | :--- |
+| `DISCORD_TOKEN` | **Yes** | — | Discord Bot Token from Developer Portal. |
+| `CLIENT_ID` | **Yes** | — | Discord Application ID used to register global slash commands. |
+| `GUILD_ID` | **Yes** | — | Primary Discord Server ID (`MBVN-DEV`). |
+| `OWNER_IDS` | No | `""` | Comma-separated Discord User IDs granted bot owner access. |
+| `POSTGRES_URL` | **Yes (Prod)** | — | Full PostgreSQL connection string (`postgresql://user:pass@host:5432/db`). |
+| `DATABASE_URL` | No | `POSTGRES_URL` | Alias for `POSTGRES_URL` used by cloud providers. |
+| `POSTGRES_SSL` | No | `true` (Prod) | Set `true` for Supabase/cloud SSL connections, `false` for local Docker DB. |
+| `AUTO_MIGRATE` | No | `true` | Automatically creates/verifies all 17 tables and triggers on startup. |
+| `PORT` | No | `3000` | Port for the built-in Express `/health` and `/ready` web server. |
+| `KEEP_ALIVE_URL` | No | `RENDER_EXTERNAL_URL` | External `/health` URL pinged periodically to prevent cloud sleep. |
+| `KEEP_ALIVE_INTERVAL_MS` | No | `810000` | Keep-alive ping interval in milliseconds (`810000` = 13.5 minutes). |
+| `LOG_LEVEL` | No | `warn` | Winston log verbosity (`error`, `warn`, `info`, `debug`). |
+
+---
+
+## Database Schema, Migrations & Backups
+
+TitanBot manages **17 PostgreSQL tables** (`guilds`, `users`, `guild_users`, `birthdays`, `giveaways`, `ticket_data`, `afk_status`, `welcome_configs`, `leveling_configs`, `user_levels`, `economy`, `verification_audit`, `invite_tracking`, `application_roles`, `temp_data`, `cache_data`, and `schema_migrations`).
+
+| Command | Description |
+| :--- | :--- |
+| `npm run migrate` | Creates all tables, indexes, `updated_at` triggers, and records schema version `v1`. |
+| `npm run migrate:check` | Verifies the live database matches `EXPECTED_SCHEMA_VERSION` (`v1` / `baseline-v1`). |
+| `npm run migrate:status` | Prints the currently applied schema version and timestamp. |
+| `npm run backup:db` | Exports a timestamped JSON/SQL backup to `./backups`. |
+| `npm run restore:db` | Restores database state from a backup file. |
+| `npm run backup:drill` | Runs an automated backup & restore verification drill. |
+
+---
+
+## Version Control & Release Workflow
+
+This repository uses **Git** with **Semantic Versioning** (`vMAJOR.MINOR.PATCH`) and automated GitHub Actions workflows:
+
+- **Continuous Integration**:
+  - [`.github/workflows/migration-version-check.yml`](.github/workflows/migration-version-check.yml) — Verifies PostgreSQL migrations on every push and pull request.
+  - [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) — Builds and publishes container images to GitHub Container Registry (`ghcr.io`) on pushes to `main` and version tags (`v*.*.*`).
+  - [`.github/workflows/restore-drill.yml`](.github/workflows/restore-drill.yml) — Weekly automated database backup/restore verification.
+
+### Creating a New Version Release
+1. Update [`CHANGELOG.md`](CHANGELOG.md) with your changes.
+2. Bump the version in `package.json` and create a signed Git tag:
    ```bash
-   git clone https://github.com/codebymitch/TitanBot.git
-   cd TitanBot
+   # Patch release (e.g. 2.1.0 -> 2.1.1)
+   npm version patch -m "chore(release): v%s"
+
+   # Minor feature release (e.g. 2.1.0 -> 2.2.0)
+   npm version minor -m "chore(release): v%s"
+
+   # Push commits and version tags to GitHub
+   git push origin main --follow-tags
    ```
 
-2. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure Environment Variables**
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` with your configuration (only the following variables require configuration, leave remaining variables as default):
-   ```env
-   # Discord Bot Configuration
-   DISCORD_TOKEN=your_discord_bot_token_here
-   CLIENT_ID=your_discord_client_id_here
-   GUILD_ID=your_discord_guild_id_here
-
-   # PostgreSQL Configuration (Primary Database)
-   POSTGRES_URL=postgresql://postgres:yourpassword@localhost:5432/titanbot
-   POSTGRES_HOST=localhost
-   POSTGRES_PORT=5432
-   POSTGRES_DB=titanbot
-   POSTGRES_USER=postgres
-   POSTGRES_PASSWORD=yourpassword
-   ```
-
-   Production note:
-   - `NODE_ENV=production`
-   - `LOG_LEVEL=warn` for a clean production console (critical issues + startup status)
-   - `LOG_LEVEL=info` if you want more detailed operational logs
-   - If your chosen `PORT` is already used, TitanBot automatically tries the next port(s)
-
-   Environment options reference:
-   - `NODE_ENV`: `development`, `production`, `test` (any non-`production` value is treated as non-production)
-   - `LOG_LEVEL`: `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`
-   - Accepted aliases for `LOG_LEVEL` in this bot: `warns`, `warning`, `warnings` → `warn`
-
-   Recommended production `.env` (easy mode + default mode):
-   ```env
-   NODE_ENV=production
-   LOG_LEVEL=warn
-   WEB_HOST=0.0.0.0
-   PORT=3000
-   PORT_RETRY_ATTEMPTS=5
-   ```
-   This gives clear startup/online status messages while keeping logs simple for non-technical operators.
-   If port `3000` is busy, the bot tries the next available ports automatically (up to `PORT_RETRY_ATTEMPTS`).
-
-### Multiple servers
-
-Slash commands are registered **globally** on startup (via `CLIENT_ID`), so the bot works in every server it is invited to. `GUILD_ID` stays in the tutorial `.env` for setup steps but is not used for command registration.
-
-Notes:
-- Global slash commands may take up to about an hour to propagate on first deploy
-- Each server has **isolated** data: config, economy, tickets, leveling, dashboards, warnings, etc. (all keys are scoped as `guild:{guildId}:...`)
-- In the [Discord Developer Portal](https://discord.com/developers/applications), ensure your bot is not restricted to a single guild if you plan to invite it elsewhere
-- Generate an OAuth2 invite URL from the [Discord Developer Portal](https://discord.com/developers/applications) (OAuth2 → URL Generator, scopes: `bot` and `applications.commands`)
-
-4. **Setup PostgreSQL Database** (Optional but recommended)
-   ```bash
-   # Create database and user
-   createdb titanbot
-   createuser titanbot
-   psql -c "ALTER USER titanbot PASSWORD 'yourpassword';"
-   psql -c "GRANT ALL PRIVILEGES ON DATABASE titanbot TO titanbot;"
-   ```
-
-5. **Verify Database Setup**
-   ```bash
-   npm run migrate:check
-   ```
-
-6. **Start the Bot**
-   ```bash
-   npm start
-   ```
-
-> **Note on database migrations:** Schema tables and legacy key migrations run
-> **automatically on startup**, so` managed hosts like **Railway** need no manual
-> migration step — just deploy/restart. To disable auto-migration set
-> `AUTO_MIGRATE=false`. You can still run a manual key migration locally with
-> `node scripts/migrate-keys.js --dry-run` (preview) or `node scripts/migrate-keys.js`.
-<a name="bot-intents"></a>
-
-## Required Bot Intents
-TitanBot requires the following Discord intents:
-- **Guilds**
-- **Guild Messages**
-- **Message Content**
-- **Guild Members**
-- **Guild Message Reactions**
-- **Guild Voice States**
-- **Direct Messages**
-- **Bot**
-- **Applications.commands**
-
-### Required Permissions
-- **View Channels**
-- **Send Messages**
-- **Embed Links**
-- **Attach Files**
-- **Read Message History**
-- **Manage Messages**
-- **Manage Channels**
-- **Manage Roles**
-- **Kick Members**
-- **Manage Messages**
-- **Ban Members**
-- **Moderate Members**
-- **Connect**
+---
 
 ## License
 
-TitanBot is released under the MIT License. See [LICENSE](LICENSE) for details.
-
-## Thank You
-
-Thank you for choosing TitanBot for your Discord server! We're constantly working to improve and add new features based on community feedback.
-
-*Last updated: May 2026*
+Released under the [MIT License](LICENSE).

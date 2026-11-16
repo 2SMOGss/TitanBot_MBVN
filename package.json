@@ -1,7 +1,11 @@
 {
-  "name": "titanbot",
+  "name": "titanbot-mbvn",
   "version": "2.1.0",
-  "description": "Modular Ultimate Community Bot by Touchpoint Support",
+  "description": "MBVN Modular Discord Community & Moderation Bot (Discord.js v14 + PostgreSQL)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/2SMOGss/TitanBot_MBVN.git"
+  },
   "main": "src/app.js",
   "type": "module",
   "scripts": {
