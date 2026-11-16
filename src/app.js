@@ -251,6 +251,20 @@ class TitanBot extends Client {
     cron.schedule('0 6 * * *', runSafeTask('birthday_check', () => checkBirthdays(this)));
     cron.schedule('* * * * *', runSafeTask('giveaway_check', () => checkGiveaways(this)));
     cron.schedule('*/15 * * * *', runSafeTask('counter_update', () => this.updateAllCounters()));
+
+    const externalBase = (process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/$/, '');
+    if (externalBase) {
+      const keepAliveTarget = externalBase.endsWith('/health') ? externalBase : `${externalBase}/health`;
+      const intervalMs = Number(process.env.KEEP_ALIVE_INTERVAL_MS) || 13.5 * 60 * 1000;
+      this.keepAliveInterval = setInterval(
+        runSafeTask('keep_alive_ping', async () => {
+          const res = await fetch(keepAliveTarget, { signal: AbortSignal.timeout(10000) });
+          logger.debug(`Keep-alive ping to ${keepAliveTarget}: HTTP ${res.status}`);
+        }),
+        intervalMs
+      );
+      startupLog(`Keep-alive ping active (${keepAliveTarget} every ${intervalMs / 60000} min)`);
+    }
   }
 
   async updateAllCounters() {
@@ -340,6 +354,10 @@ class TitanBot extends Client {
       
       logger.info('Stopping cron jobs...');
       cron.getTasks().forEach(task => task.stop());
+      if (this.keepAliveInterval) {
+        clearInterval(this.keepAliveInterval);
+        this.keepAliveInterval = null;
+      }
       logger.info('✅ Cron jobs stopped');
 
       logger.info('Stopping music players...');

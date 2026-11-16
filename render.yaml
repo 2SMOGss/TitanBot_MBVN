@@ -18,6 +18,10 @@ services:
         value: true
       - key: POSTGRES_SSL
         value: true
+      - key: KEEP_ALIVE_URL
+        value: https://titanbot-mbvn.onrender.com/health
+      - key: KEEP_ALIVE_INTERVAL_MS
+        value: 810000
       - key: DISCORD_TOKEN
         sync: false
       - key: CLIENT_ID
