@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: titanbot-mbvn
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: warn
+      - key: PORT
+        value: 3000
+      - key: WEB_HOST
+        value: 0.0.0.0
+      - key: AUTO_MIGRATE
+        value: true
+      - key: POSTGRES_SSL
+        value: true
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: GUILD_ID
+        sync: false
+      - key: POSTGRES_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false

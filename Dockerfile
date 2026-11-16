@@ -8,6 +8,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY . .
+RUN mkdir -p /usr/src/app/logs /usr/src/app/backups && chown -R node:node /usr/src/app
+
+USER node
 
 EXPOSE 3000
 
