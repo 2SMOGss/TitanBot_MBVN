@@ -12,6 +12,8 @@ import { getCommandPrefix, getBotMessage, isBotOwner, isCommandCategoryEnabled, 
 import { enforceAbuseProtection, formatCooldownDuration } from '../utils/abuseProtection.js';
 import { createEmbed } from '../utils/embeds.js';
 import { isCommandEnabled } from '../services/commandAccessService.js';
+import { handlePassiveFaqMessage } from '../services/uplandFaqService.js';
+import { buildAskResponseEmbed } from '../commands/Community/ask.js';
 import {
   getCountingGameConfig,
   saveCountingGameConfig,
@@ -48,7 +50,10 @@ export default {
         }
       }
 
-      await handlePrefixCommand(message, client);
+      const prefixHandled = await handlePrefixCommand(message, client);
+      if (!prefixHandled) {
+        await handlePassiveFaqMessage(message, client, buildAskResponseEmbed);
+      }
 
       await handleLeveling(message, client);
     } catch (error) {
@@ -64,7 +69,7 @@ async function handlePrefixCommand(message, client) {
     const parsed = parsePrefixCommand(message.content, prefix);
     
     if (!parsed) {
-      return; 
+      return false; 
     }
 
     let { commandName, args } = parsed;
@@ -154,8 +159,10 @@ async function handlePrefixCommand(message, client) {
     logger.info(`Executing prefix command: ${prefix}${commandName} (resolved to ${resolvedCommandName}) by ${message.author.tag}`);
     
     await executePrefixCommand(command, message, args, client, prefix, guildConfig);
+    return true;
   } catch (error) {
     logger.error('Error handling prefix command:', error);
+    return false;
   }
 }
 

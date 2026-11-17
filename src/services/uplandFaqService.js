@@ -1,9 +1,12 @@
 import fs from 'fs';
-import fsp from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { PermissionFlagsBits } from 'discord.js';
 import { logger } from '../utils/logger.js';
+import { createEmbed } from '../utils/embeds.js';
+import { getGuildConfig } from './config/guildConfig.js';
+import { memberHasModerationCommandAccess } from '../utils/permissionGuard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,24 +20,63 @@ const CHUNK_SIZE_WORDS = Number(process.env.CHUNK_SIZE_WORDS) || 500;
 const CHUNK_OVERLAP_WORDS = Number(process.env.CHUNK_OVERLAP_WORDS) || 75;
 const TOP_K_CHUNKS = Number(process.env.TOP_K_CHUNKS) || 3;
 
+const PENDING_QUESTION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const AUTO_ASK_COOLDOWN_MS = 12 * 1000; // 12s per user cooldown for passive auto-answers
+
 const STOP_WORDS = new Set([
     'what', 'how', 'when', 'where', 'who', 'why', 'which', 'is', 'are', 'was', 'were',
     'the', 'for', 'in', 'to', 'do', 'does', 'did', 'can', 'could', 'should', 'would',
     'and', 'or', 'but', 'with', 'from', 'about', 'into', 'onto', 'upland', 'tell', 'me',
+    'anyone', 'know', 'someone', 'please', 'help', 'guys', 'hey',
 ]);
+
+const UPLAND_DOMAIN_KEYWORDS = new Set([
+    'upland', 'upx', 'fsa', 'spark', 'sparklet', 'uplander', 'visitor', 'director',
+    'executive', 'mint', 'minting', 'property', 'properties', 'collection', 'collections',
+    'send', 'sends', 'explorer', 'treasure', 'hunt', 'hunting', 'miami', 'metaventure',
+    'metaventures', 'legit', 'legits', 'kart', 'karts', 'racing', 'race', 'networth',
+    'yield', 'earnings', 'rent', 'build', 'building', 'structure', 'structures', 'factory',
+    'showroom', 'trove', 'troves', 'uppie', 'uppies', 'neighborhood', 'neighborhoods',
+    'terminal', 'train', 'plane', 'airport', 'bus', 'travel', 'traveling', 'visa',
+    'passport', 'kyc', 'tilia', 'swap', 'trade', 'trading', 'marketplace', 'floor',
+    'ornament', 'ornaments', 'map', 'asset', 'assets', 'dev', 'shop', 'totem', 'totems',
+    'stem', 'life', 'kapuni', 'mana', 'genesis', 'season', 'pass', 'badge', 'badges',
+    'mission', 'missions', 'quest', 'quests', 'istanbul', 'london', 'tokyo', 'manhattan',
+    'bronx', 'brooklyn', 'queens', 'chicago', 'san', 'francisco', 'los', 'angeles',
+]);
+
+const SMALL_TALK_PATTERNS = [
+    /^how\s+are\s+you/i,
+    /^how('?s|\s+is)\s+it\s+going/i,
+    /^what('?s|\s+is)\s+up\b/i,
+    /^what\s+are\s+you\s+doing/i,
+    /^who\s+are\s+you/i,
+    /^where\s+are\s+you\s+from/i,
+    /^how\s+old\s+are\s+you/i,
+    /^can\s+you\s+hear\s+me/i,
+];
+
+const QUESTION_STARTERS = /^(how\s+(do|does|can|to|much|many|long)|what\s+(is|are|does|do|happens|should)|what's|whats|where\s+(do|does|can|is|are|should)|when\s+(is|are|do|does|will)|why\s+(is|are|do|does|can't|cant|cannot)|can\s+(i|you|we|someone|anyone)|does\s+anyone\s+know|anyone\s+know|is\s+there\s+a\s+way)/i;
 
 const SYSTEM_PROMPT = [
     'You are a helpful Upland assistant for our Discord community.',
-    'Answer the player\'s question using ONLY the provided Official Upland Documentation and Community Veteran Answers.',
-    'If the answer is not covered in the provided context, tell them to ask a veteran player in the chat or click the "💡 Teach / Submit Answer" button below to add an answer to the community database.',
+    'Answer the player\'s question using ONLY the provided Official Upland Documentation and Community FAQ Database.',
+    'IMPORTANT RULE: If the provided documentation/database does NOT contain the answer to the player\'s specific question, you MUST start your response with the exact token `[UNANSWERED]` followed by a short message telling them that this isn\'t in the official docs yet and inviting a veteran player in chat to answer (so the bot can learn it).',
     '',
     'Guidelines:',
     '- Keep answers concise, accurate, and easy to read in Discord (use bullet points and bold text where helpful).',
-    '- If a Community Veteran Answer directly answers the question, incorporate it and credit the contributor.',
+    '- If a Community FAQ Database entry answers the question, use it and credit the contributor.',
     '- Do NOT invent game mechanics, prices, or rules not supported by the provided context.',
 ].join('\n');
 
 let cachedChunks = null;
+
+// Map<channelId, Array<{ id, guildId, channelId, question, askerId, askerTag, messageId, botReplyId, createdAt }>>
+const pendingChannelQuestions = new Map();
+// Map<userId, number> cooldown timestamps for passive auto-reply
+const passiveUserCooldowns = new Map();
+// Set<messageId> to avoid double-processing messages
+const processedAnswerMessageIds = new Set();
 
 export function tokenize(text) {
     if (!text || typeof text !== 'string') return [];
@@ -48,6 +90,82 @@ export function extractKeywords(text) {
 
 function getPgPool(client) {
     return client?.db?.db?.pool || null;
+}
+
+/**
+ * Determine if a normal chat message is a question.
+ */
+export function isLikelyQuestion(content) {
+    if (!content || typeof content !== 'string') return false;
+    const trimmed = content.trim();
+    if (trimmed.length < 10 || trimmed.length > 450) return false;
+    if (trimmed.startsWith('!') || trimmed.startsWith('/')) return false;
+
+    for (const pattern of SMALL_TALK_PATTERNS) {
+        if (pattern.test(trimmed)) return false;
+    }
+
+    const words = tokenize(trimmed);
+    if (words.length < 3) return false;
+
+    if (trimmed.includes('?')) return true;
+    return QUESTION_STARTERS.test(trimmed);
+}
+
+/**
+ * Check if a question mentions Upland concepts or matches the server's Community FAQ DB.
+ */
+export function hasUplandDomainSignal(content) {
+    const tokens = tokenize(content);
+    if (tokens.some((t) => UPLAND_DOMAIN_KEYWORDS.has(t))) {
+        return true;
+    }
+    const low = String(content || '').toLowerCase();
+    return (
+        low.includes('fair start') ||
+        low.includes('block explorer') ||
+        low.includes('miami beach') ||
+        low.includes('net worth') ||
+        low.includes('treasure hunt')
+    );
+}
+
+export function registerPendingQuestion({
+    guildId,
+    channelId,
+    question,
+    askerId,
+    askerTag,
+    messageId,
+    botReplyId = null,
+}) {
+    if (!channelId || !question) return;
+    const now = Date.now();
+    const list = (pendingChannelQuestions.get(channelId) || []).filter(
+        (item) => now - item.createdAt < PENDING_QUESTION_TTL_MS
+    );
+
+    // Avoid duplicate pending question text in the same channel
+    const normQ = question.trim().toLowerCase();
+    const existingIdx = list.findIndex((q) => q.question.trim().toLowerCase() === normQ);
+    if (existingIdx !== -1) {
+        list.splice(existingIdx, 1);
+    }
+
+    list.unshift({
+        id: `${channelId}:${messageId || now}`,
+        guildId: String(guildId),
+        channelId: String(channelId),
+        question: question.trim(),
+        askerId: String(askerId || ''),
+        askerTag: String(askerTag || 'Player'),
+        messageId: messageId ? String(messageId) : null,
+        botReplyId: botReplyId ? String(botReplyId) : null,
+        createdAt: now,
+    });
+
+    pendingChannelQuestions.set(channelId, list.slice(0, 10));
+    logger.info(`[FAQ Self-Heal] Registered pending unanswered question in channel ${channelId}: "${question}"`);
 }
 
 export function loadOfficialChunks() {
@@ -176,7 +294,7 @@ export function retrieveOfficialChunks(question, topK = TOP_K_CHUNKS) {
 
     const qTokens = tokenize(question).filter((w) => !STOP_WORDS.has(w));
     const searchTokens = qTokens.length > 0 ? qTokens : tokenize(question);
-    if (!searchTokens.length) return chunks.slice(0, topK);
+    if (!searchTokens.length) return [];
 
     const N = chunks.length;
     const docTokensList = chunks.map((c) => tokenize(`${c.title || ''} ${c.text || ''}`));
@@ -202,18 +320,23 @@ export function retrieveOfficialChunks(question, topK = TOP_K_CHUNKS) {
         }
 
         let score = 0;
+        let matchedTerms = 0;
         for (const term of searchTokens) {
             const freq = tf.get(term) || 0;
             if (!freq) continue;
+            matchedTerms += 1;
             const nQ = df.get(term) || 0;
             const idf = Math.log((N - nQ + 0.5) / (nQ + 0.5) + 1.0);
             const denom = freq + k1 * (1 - b + b * (dl / Math.max(avgdl, 1.0)));
             score += idf * ((freq * (k1 + 1)) / denom);
         }
 
+        const coverage = matchedTerms / searchTokens.length;
         scored.push({
             ...chunks[idx],
             score: Number(score.toFixed(4)),
+            matchedTerms,
+            coverage: Number(coverage.toFixed(3)),
         });
     }
 
@@ -221,9 +344,6 @@ export function retrieveOfficialChunks(question, topK = TOP_K_CHUNKS) {
     return scored.slice(0, topK);
 }
 
-/**
- * Ensure the guild row exists before inserting into upland_faq_entries (FK constraint).
- */
 async function ensureGuildRow(pool, guildId) {
     await pool.query(
         `INSERT INTO guilds (id, config) VALUES ($1, '{}') ON CONFLICT (id) DO NOTHING`,
@@ -231,9 +351,6 @@ async function ensureGuildRow(pool, guildId) {
     );
 }
 
-/**
- * Add or update a user/community FAQ answer in PostgreSQL (with memory fallback).
- */
 export async function addCommunityAnswer(client, {
     guildId,
     question,
@@ -282,7 +399,6 @@ export async function addCommunityAnswer(client, {
         return { entry: inserted.rows[0], updated: false };
     }
 
-    // Memory / key-value fallback
     const key = `guild:${guildId}:upland_faq_entries`;
     const entries = (await client?.db?.get?.(key, [])) || [];
     const nextId = entries.length > 0 ? Math.max(...entries.map((e) => Number(e.id) || 0)) + 1 : 1;
@@ -304,9 +420,6 @@ export async function addCommunityAnswer(client, {
     return { entry, updated: false };
 }
 
-/**
- * Search user-submitted answers in PostgreSQL for a given question.
- */
 export async function searchCommunityAnswers(client, guildId, question, topK = 3) {
     let rows = [];
     const pool = getPgPool(client);
@@ -345,9 +458,8 @@ export async function searchCommunityAnswers(client, guildId, question, topK = 3
             continue;
         }
 
-        const docTokens = tokenize(`${row.question} ${row.keywords || ''} ${row.answer}`);
         const qDocTokens = new Set(tokenize(row.question));
-        const allDocTokens = new Set(docTokens);
+        const allDocTokens = new Set(tokenize(`${row.question} ${row.keywords || ''} ${row.answer}`));
 
         let matchScore = 0;
         let matchedQueryTerms = 0;
@@ -375,9 +487,6 @@ export async function searchCommunityAnswers(client, guildId, question, topK = 3
     return scored.slice(0, topK);
 }
 
-/**
- * List recent community answers from the database.
- */
 export async function listCommunityAnswers(client, guildId, limit = 10) {
     const pool = getPgPool(client);
     if (pool) {
@@ -396,9 +505,6 @@ export async function listCommunityAnswers(client, guildId, limit = 10) {
     return rows.slice(0, limit);
 }
 
-/**
- * Delete a community answer by ID.
- */
 export async function deleteCommunityAnswer(client, guildId, entryId) {
     const pool = getPgPool(client);
     if (pool) {
@@ -423,14 +529,15 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
 
     if (communityMatches.length > 0) {
         const topComm = communityMatches[0];
-        const contributor = topComm.author_tag ? ` (contributed by **${topComm.author_tag}**)` : '';
-        parts.push(`**💡 Community Answer${contributor}:**\n${topComm.answer}`);
+        const contributor = topComm.author_tag ? ` (answered by **${topComm.author_tag}**)` : '';
+        parts.push(`${topComm.answer}\n\n*- Community FAQ #${topComm.id}${contributor}*`);
     }
 
+    const relevantOfficial = officialChunks.filter((c) => c.score >= 2.2);
     const qWords = tokenize(question).filter((w) => !STOP_WORDS.has(w));
     const candidateBlocks = [];
 
-    for (const chunk of officialChunks) {
+    for (const chunk of relevantOfficial) {
         const rawText = chunk.text || '';
         const body = rawText.replace(/^Document:.*?\nSource:.*?\n+/s, '').trim();
         const sections = body.split(/\n(?=#{1,3}\s|\*\*|- )/);
@@ -461,6 +568,7 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
         const maxOfficialLen = communityMatches.length > 0 ? 750 : 1200;
 
         for (const item of scoredBlocks) {
+            if (item.score <= 0) continue;
             if (!selected.includes(item.block) && totalLen + item.block.length < maxOfficialLen) {
                 selected.push(item.block);
                 totalLen += item.block.length;
@@ -471,43 +579,25 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
         if (selected.length > 0) {
             parts.push(selected.join('\n\n'));
         }
-    } else if (officialChunks[0]) {
-        const fallbackBody = (officialChunks[0].text || '').replace(/^Document:.*?\nSource:.*?\n+/s, '').trim();
-        if (fallbackBody) {
-            parts.push(fallbackBody.slice(0, 900));
-        }
     }
 
     if (parts.length === 0) {
-        return 'I couldn\'t find that in the Upland documentation yet. Ask a veteran player in chat or click **💡 Teach Answer** below to add the answer to our server database!';
+        return null;
     }
 
     return parts.join('\n\n---\n\n');
 }
 
-async function callGeminiApi(question, contextText) {
+async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputTokens = 700) {
     const apiKey = (process.env.GEMINI_API_KEY || '').trim();
     if (!apiKey || apiKey === 'your_gemini_api_key_here') {
         return null;
     }
 
     const model = (process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
-    const userPrompt = [
-        '### KNOWLEDGE BASE (COMMUNITY DATABASE & OFFICIAL UPLAND DOCUMENTATION):',
-        contextText,
-        '',
-        '### PLAYER QUESTION:',
-        question,
-        '',
-        '### INSTRUCTIONS:',
-        'Answer the player\'s question accurately using ONLY the knowledge base above.',
-        'If a Community Answer is present and relevant, highlight it clearly.',
-        'If the answer is not in the knowledge base, suggest asking a veteran player or clicking "💡 Teach Answer" to save an answer for future players.',
-    ].join('\n');
-
     const payload = {
         systemInstruction: {
-            parts: [{ text: SYSTEM_PROMPT }],
+            parts: [{ text: systemInstruction }],
         },
         contents: [
             {
@@ -517,7 +607,7 @@ async function callGeminiApi(question, contextText) {
         ],
         generationConfig: {
             temperature: 0.15,
-            maxOutputTokens: 700,
+            maxOutputTokens,
         },
     };
 
@@ -566,19 +656,31 @@ export async function answerUplandQuestion(client, guildId, question, topK = TOP
         Promise.resolve(retrieveOfficialChunks(question, topK)),
     ]);
 
-    const contextSections = [];
+    const strongOfficial = officialChunks.filter((c) => c.score >= 2.2 && c.coverage >= 0.34);
+    const hasKnowledgeMatch = communityMatches.length > 0 || strongOfficial.length > 0;
 
+    if (!hasKnowledgeMatch) {
+        return {
+            answered: false,
+            answer: 'I don\'t have that in my Upland FAQ database yet — if a veteran player answers this in chat, I will automatically learn it for next time!',
+            sources: [],
+            communityMatches: [],
+            officialChunks: [],
+        };
+    }
+
+    const contextSections = [];
     if (communityMatches.length > 0) {
         communityMatches.forEach((m, idx) => {
             contextSections.push(
-                `--- [Community Database Answer #${idx + 1} | ID: #${m.id} | Contributor: ${m.author_tag || 'Community Member'}] ---\n` +
+                `--- [Community FAQ Database #${idx + 1} | ID: #${m.id} | Contributor: ${m.author_tag || 'Community Member'}] ---\n` +
                 `Question: ${m.question}\nAnswer: ${m.answer}`
             );
         });
     }
 
-    if (officialChunks.length > 0) {
-        officialChunks.forEach((c, idx) => {
+    if (strongOfficial.length > 0) {
+        strongOfficial.forEach((c, idx) => {
             contextSections.push(
                 `--- [Official Upland Doc #${idx + 1} | Title: ${c.title || 'Upland Docs'} | Source: ${c.url || ''}] ---\n` +
                 `${c.text || ''}`
@@ -587,7 +689,7 @@ export async function answerUplandQuestion(client, guildId, question, topK = TOP
     }
 
     const uniqueSources = [];
-    for (const c of officialChunks) {
+    for (const c of strongOfficial) {
         const url = c.url || '';
         const title = (c.title || 'Official Upland Guide').split('|')[0].trim();
         if (url && !uniqueSources.some((s) => s.url === url)) {
@@ -595,19 +697,307 @@ export async function answerUplandQuestion(client, guildId, question, topK = TOP
         }
     }
 
-    let answerText = null;
-    if (contextSections.length > 0) {
-        answerText = await callGeminiApi(question, contextSections.join('\n\n'));
+    const userPrompt = [
+        '### KNOWLEDGE BASE (COMMUNITY FAQ DATABASE & OFFICIAL UPLAND DOCUMENTATION):',
+        contextSections.join('\n\n'),
+        '',
+        '### PLAYER QUESTION:',
+        question,
+        '',
+        '### INSTRUCTIONS:',
+        'Answer the player\'s question accurately using ONLY the knowledge base above.',
+        'If the knowledge base above does NOT actually answer the specific question asked, begin your reply with `[UNANSWERED]`.',
+    ].join('\n');
+
+    let geminiText = await callGeminiPrompt(SYSTEM_PROMPT, userPrompt, 700);
+    if (geminiText) {
+        if (geminiText.startsWith('[UNANSWERED]') || /not in the (official )?documentation/i.test(geminiText)) {
+            const cleanUnanswered = geminiText.replace(/^\[UNANSWERED\]\s*/i, '').trim() ||
+                'I don\'t have that in my Upland FAQ database yet — if a veteran player answers this in chat, I will automatically learn it for next time!';
+            return {
+                answered: false,
+                answer: cleanUnanswered,
+                sources: [],
+                communityMatches: [],
+                officialChunks: [],
+            };
+        }
+
+        return {
+            answered: true,
+            answer: geminiText,
+            sources: uniqueSources.slice(0, 3),
+            communityMatches,
+            officialChunks: strongOfficial,
+        };
     }
 
-    if (!answerText) {
-        answerText = extractGroundedAnswer(question, officialChunks, communityMatches);
+    const localAnswer = extractGroundedAnswer(question, strongOfficial, communityMatches);
+    if (!localAnswer) {
+        return {
+            answered: false,
+            answer: 'I don\'t have that in my Upland FAQ database yet — if a veteran player answers this in chat, I will automatically learn it for next time!',
+            sources: [],
+            communityMatches: [],
+            officialChunks: [],
+        };
     }
 
     return {
-        answer: answerText,
+        answered: true,
+        answer: localAnswer,
         sources: uniqueSources.slice(0, 3),
         communityMatches,
-        officialChunks,
+        officialChunks: strongOfficial,
     };
+}
+
+/**
+ * Verify if a community member's message answers an open question, and distill a clean FAQ answer.
+ */
+async function verifyAndDistillCommunityAnswer(question, candidateMessage) {
+    const trimmed = String(candidateMessage || '').trim();
+    if (trimmed.length < 12 || trimmed.length > 1800) return null;
+    if (trimmed.startsWith('!') || trimmed.startsWith('/')) return null;
+
+    // Reject obvious non-answers
+    if (/^(idk|i don'?t know|not sure|no idea|same|bump|following|lol|lmao|haha|true|yep|nope|maybe)\b/i.test(trimmed)) {
+        return null;
+    }
+
+    const verificationSystemPrompt = [
+        'You are a strict knowledge-base curator for an Upland Discord server.',
+        'Given a PLAYER QUESTION and a COMMUNITY MEMBER REPLY, determine whether the reply provides a genuine, factual, helpful answer to the question.',
+        'If the reply is casual chat, a joke, a guess ("idk maybe..."), a counter-question, or unrelated to the question, output exactly: REJECT',
+        'If the reply DOES answer the question, output `ACCEPT:` followed by a clear, self-contained 1-3 sentence answer distilled from the member\'s reply.',
+    ].join('\n');
+
+    const verificationUserPrompt = `PLAYER QUESTION: ${question}\nCOMMUNITY MEMBER REPLY: ${trimmed}`;
+    const aiVerdict = await callGeminiPrompt(verificationSystemPrompt, verificationUserPrompt, 350);
+
+    if (aiVerdict) {
+        if (aiVerdict.startsWith('REJECT') || !aiVerdict.startsWith('ACCEPT:')) {
+            return null;
+        }
+        const cleaned = aiVerdict.replace(/^ACCEPT:\s*/i, '').trim();
+        return cleaned.length >= 10 ? cleaned : null;
+    }
+
+    // Fallback heuristic if Gemini API is offline/rate-limited:
+    // Accept if it's a non-question statement >= 20 chars sharing at least 1 keyword with the question or Upland domain
+    if (trimmed.includes('?')) return null;
+    const qTokens = new Set(tokenize(question).filter((w) => !STOP_WORDS.has(w)));
+    const aTokens = tokenize(trimmed);
+    if (aTokens.length < 5) return null;
+
+    const sharesKeyword = aTokens.some((t) => qTokens.has(t) || UPLAND_DOMAIN_KEYWORDS.has(t));
+    return sharesKeyword ? trimmed : null;
+}
+
+/**
+ * Post an audit card to the server's configured #bot-logs channel when a new FAQ is self-learned.
+ */
+async function logLearnedFaqToAuditChannel(client, guild, guildConfig, entry, askerId, answerer, channelId, updated) {
+    try {
+        const logChannelId = guildConfig?.logging?.channels?.audit;
+        if (!logChannelId || !guild) return;
+
+        const logChannel = guild.channels.cache.get(logChannelId) ||
+            await guild.channels.fetch(logChannelId).catch(() => null);
+        if (!logChannel || !logChannel.isTextBased()) return;
+
+        const embed = createEmbed({
+            title: `🧠 Self-Healing FAQ ${updated ? 'Updated' : 'Learned'} (#${entry.id})`,
+            description: `TitanBot detected an unanswered question in <#${channelId}> and learned the answer from a community member.`,
+            color: 'success',
+            fields: [
+                {
+                    name: '❓ Question',
+                    value: String(entry.question).slice(0, 1024),
+                    inline: false,
+                },
+                {
+                    name: '💡 Learned Answer',
+                    value: String(entry.answer).slice(0, 1024),
+                    inline: false,
+                },
+                {
+                    name: '👤 Asked By',
+                    value: askerId ? `<@${askerId}>` : 'Unknown',
+                    inline: true,
+                },
+                {
+                    name: '🎓 Answered By',
+                    value: `<@${answerer.id}> (${entry.verified ? '✅ Staff/Mod' : '👥 Community'})`,
+                    inline: true,
+                },
+            ],
+            footer: `To remove this entry if inaccurate, run /ask question: delete #${entry.id}`,
+        });
+
+        await logChannel.send({ embeds: [embed] });
+    } catch (error) {
+        logger.debug('Failed to send self-healing FAQ log to audit channel:', error.message);
+    }
+}
+
+/**
+ * Passive Zero-Command Handler called from messageCreate:
+ * 1. If a message is an answer (reply or follow-up) to an unanswered question -> learns & saves to PostgreSQL!
+ * 2. If a message is a natural Upland/server question -> auto-answers if known, or tracks as pending if unknown!
+ */
+export async function handlePassiveFaqMessage(message, client, buildAskResponseEmbed) {
+    try {
+        if (!message?.guild || message.author?.bot) return false;
+        const content = (message.content || '').trim();
+        if (!content || content.startsWith('!') || content.startsWith('/')) return false;
+
+        const guildId = message.guild.id;
+        const channelId = message.channel.id;
+        const now = Date.now();
+
+        // ---------------------------------------------------------------------
+        // STEP A: Check if this message is a Community Member ANSWERING a question
+        // ---------------------------------------------------------------------
+        let matchedPending = null;
+        const channelList = (pendingChannelQuestions.get(channelId) || []).filter(
+            (item) => now - item.createdAt < PENDING_QUESTION_TTL_MS
+        );
+
+        // A1. Check if the user used Discord's Reply feature
+        if (message.reference?.messageId) {
+            const refId = String(message.reference.messageId);
+            matchedPending = channelList.find(
+                (q) => q.messageId === refId || q.botReplyId === refId
+            );
+
+            // Even if the original question wasn't tracked yet, check if the referenced message was a question!
+            if (!matchedPending) {
+                const refMsg = message.channel.messages.cache.get(refId) ||
+                    await message.channel.messages.fetch(refId).catch(() => null);
+                if (refMsg && !refMsg.author?.bot && refMsg.author.id !== message.author.id) {
+                    if (isLikelyQuestion(refMsg.content)) {
+                        matchedPending = {
+                            id: `${channelId}:${refMsg.id}`,
+                            guildId,
+                            channelId,
+                            question: refMsg.content.trim(),
+                            askerId: refMsg.author.id,
+                            askerTag: refMsg.author.tag,
+                            messageId: refMsg.id,
+                            createdAt: refMsg.createdTimestamp || now,
+                        };
+                    }
+                }
+            }
+        }
+
+        // A2. Otherwise, check if there is an open pending question in this channel from another user
+        if (!matchedPending && channelList.length > 0 && !isLikelyQuestion(content)) {
+            const candidate = channelList[0];
+            if (candidate.askerId !== message.author.id) {
+                matchedPending = candidate;
+            }
+        }
+
+        if (matchedPending && !processedAnswerMessageIds.has(message.id)) {
+            processedAnswerMessageIds.add(message.id);
+            const distilledAnswer = await verifyAndDistillCommunityAnswer(matchedPending.question, content);
+            if (distilledAnswer) {
+                const guildConfig = await getGuildConfig(client, guildId);
+                const isVerifiedStaff = memberHasModerationCommandAccess(
+                    message.member,
+                    guildConfig,
+                    PermissionFlagsBits.ManageMessages
+                );
+
+                const { entry, updated } = await addCommunityAnswer(client, {
+                    guildId,
+                    question: matchedPending.question,
+                    answer: distilledAnswer,
+                    authorId: message.author.id,
+                    authorTag: message.author.tag,
+                    verified: isVerifiedStaff,
+                });
+
+                // Remove resolved question from pending list
+                const remaining = (pendingChannelQuestions.get(channelId) || []).filter(
+                    (q) => q.id !== matchedPending.id
+                );
+                pendingChannelQuestions.set(channelId, remaining);
+
+                logger.info(
+                    `[FAQ Self-Heal] Learned FAQ #${entry.id} in guild ${guildId} from ${message.author.tag}: Q="${entry.question}"`
+                );
+
+                await logLearnedFaqToAuditChannel(
+                    client,
+                    message.guild,
+                    guildConfig,
+                    entry,
+                    matchedPending.askerId,
+                    message.author,
+                    channelId,
+                    updated
+                );
+                return true;
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // STEP B: Check if this message is a Natural Question in chat
+        // ---------------------------------------------------------------------
+        if (!isLikelyQuestion(content)) {
+            return false;
+        }
+
+        // Check if it matches our Community FAQ Database OR has Upland domain keywords
+        const communityMatches = await searchCommunityAnswers(client, guildId, content, 2);
+        const isUplandTopic = communityMatches.length > 0 || hasUplandDomainSignal(content);
+
+        if (!isUplandTopic) {
+            // Still track general server questions in case a veteran replies to them!
+            registerPendingQuestion({
+                guildId,
+                channelId,
+                question: content,
+                askerId: message.author.id,
+                askerTag: message.author.tag,
+                messageId: message.id,
+            });
+            return false;
+        }
+
+        // Respect per-user cooldown for automatic replies
+        const lastAutoReply = passiveUserCooldowns.get(message.author.id) || 0;
+        if (now - lastAutoReply < AUTO_ASK_COOLDOWN_MS) {
+            return false;
+        }
+
+        const result = await answerUplandQuestion(client, guildId, content);
+
+        if (result.answered) {
+            passiveUserCooldowns.set(message.author.id, now);
+            const embed = buildAskResponseEmbed(content, result);
+            await message.reply({
+                embeds: [embed],
+                allowedMentions: { repliedUser: false },
+            });
+            return true;
+        }
+
+        // Not found in docs/DB yet -> stay silent in chat and register as a pending question to learn from!
+        registerPendingQuestion({
+            guildId,
+            channelId,
+            question: content,
+            askerId: message.author.id,
+            askerTag: message.author.tag,
+            messageId: message.id,
+        });
+        return false;
+    } catch (error) {
+        logger.error('Error in handlePassiveFaqMessage:', error);
+        return false;
+    }
 }

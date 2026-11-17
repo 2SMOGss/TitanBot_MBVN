@@ -3,7 +3,6 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    MessageFlags,
     PermissionFlagsBits,
 } from 'discord.js';
 import { createEmbed, successEmbed, infoEmbed } from '../../utils/embeds.js';
@@ -14,6 +13,7 @@ import {
     addCommunityAnswer,
     listCommunityAnswers,
     deleteCommunityAnswer,
+    registerPendingQuestion,
 } from '../../services/uplandFaqService.js';
 import { logger } from '../../utils/logger.js';
 
@@ -43,9 +43,9 @@ export function buildAskResponseEmbed(question, result) {
 
     if (communityMatches.length > 0) {
         const topMatch = communityMatches[0];
-        const statusBadge = topMatch.verified ? '✅ Verified Staff/Veteran' : '👥 Community Contributed';
+        const statusBadge = topMatch.verified ? '✅ Verified Staff/Veteran' : '👥 Community Answer';
         embed.addFields({
-            name: '💾 Community FAQ Database Match',
+            name: '💾 Community FAQ Database',
             value: `Entry **#${topMatch.id}** by **${topMatch.author_tag || 'Member'}** (${statusBadge})`,
             inline: false,
         });
@@ -63,10 +63,6 @@ export function buildAskResponseEmbed(question, result) {
         });
     }
 
-    embed.setFooter({
-        text: 'Know a better tip? Click "💡 Teach / Submit Answer" to save it to the database!',
-    });
-
     return embed;
 }
 
@@ -76,7 +72,7 @@ export async function buildCommunityFaqListEmbed(client, guildId) {
     if (!entries.length) {
         return infoEmbed(
             '📚 Community FAQ Database',
-            'No user answers have been saved yet!\n\nClick **💡 Teach / Submit Answer** on any `/ask` response or run `/ask question:... teach_answer:...` to add the first community answer.'
+            'No community answers have been learned yet!\n\nWhenever a player asks a question in chat that isn\'t in the official docs and a community member replies with the answer, the bot automatically learns and saves it here.'
         );
     }
 
@@ -87,28 +83,28 @@ export async function buildCommunityFaqListEmbed(client, guildId) {
     });
 
     return createEmbed({
-        title: `📚 Community FAQ Database (${entries.length} Recent)`,
+        title: `📚 Learned Community FAQ Database (${entries.length} Recent)`,
         description: lines.join('\n\n').slice(0, 3900),
         color: 'info',
-        footer: 'Use /ask question:<topic> to query both Official Docs & Community Answers',
+        footer: 'Self-healing FAQ database • Admins can remove an entry with /ask question: delete #<id>',
     });
 }
 
 export default {
     data: new SlashCommandBuilder()
         .setName('ask')
-        .setDescription('Ask any question about Upland or add an answer to the Community FAQ Database')
+        .setDescription('Ask any question about Upland (searches Official Docs & Self-Healing Community FAQ DB)')
         .addStringOption((option) =>
             option
                 .setName('question')
-                .setDescription('Your question about Upland (or "list" to view saved community answers)')
+                .setDescription('Your question about Upland (or "list" to view learned community answers)')
                 .setMaxLength(300)
                 .setRequired(true)
         )
         .addStringOption((option) =>
             option
                 .setName('teach_answer')
-                .setDescription('Optional: Save your own answer for this question into the Community FAQ Database')
+                .setDescription('Optional: Directly save an answer for this question into the FAQ Database')
                 .setMaxLength(1500)
                 .setRequired(false)
         ),
@@ -128,16 +124,16 @@ export default {
         }
 
         const guildId = interaction.guildId || interaction.guild?.id || 'global';
+        const channelId = interaction.channel?.id || interaction.channelId;
 
         if (!rawQuestion) {
             await interaction.reply({
                 embeds: [
                     infoEmbed(
                         '🦙 Upland FAQ Assistant',
-                        'Ask anything about **Upland** using:\n• `/ask question: What is UPX used for?`\n• `!ask What is UPX used for?`\n• `@titanbot-mbvn How do FSA properties work?`'
+                        'Ask any question about **Upland** right in chat, or use:\n• `/ask question: What is UPX used for?`\n• `!ask How do FSA properties work?`'
                     ),
                 ],
-                components: [buildFaqActionRow(guildId)],
             });
             return;
         }
@@ -146,7 +142,6 @@ export default {
             const listEmbed = await buildCommunityFaqListEmbed(interaction.client, guildId);
             await interaction.reply({
                 embeds: [listEmbed],
-                components: [buildFaqActionRow(guildId)],
             });
             return;
         }
@@ -154,10 +149,21 @@ export default {
         const result = await answerUplandQuestion(interaction.client, guildId, rawQuestion);
         const embed = buildAskResponseEmbed(rawQuestion, result);
 
-        await interaction.reply({
+        const sentMsg = await interaction.reply({
             embeds: [embed],
-            components: [buildFaqActionRow(guildId)],
         });
+
+        if (!result.answered && channelId) {
+            registerPendingQuestion({
+                guildId,
+                channelId,
+                question: rawQuestion,
+                askerId: interaction.user?.id || interaction.author?.id,
+                askerTag: interaction.user?.tag || interaction.author?.tag,
+                messageId: interaction.id,
+                botReplyId: sentMsg?.id || null,
+            });
+        }
     },
 
     async execute(interaction, guildConfig, client) {
@@ -168,7 +174,6 @@ export default {
         const question = interaction.options.getString('question', true).trim();
         const teachAnswer = interaction.options.getString('teach_answer', false)?.trim();
 
-        // 1. Direct Teach / Save Answer mode via optional parameter
         if (teachAnswer) {
             const isVerifiedStaff = memberHasModerationCommandAccess(
                 interaction.member,
@@ -194,17 +199,14 @@ export default {
                         `**Question:** ${entry.question}\n\n**Answer:**\n${entry.answer}\n\n*Contributed by <@${interaction.user.id}>${isVerifiedStaff ? ' (✅ Verified Staff)' : ''}*`
                     ),
                 ],
-                components: [buildFaqActionRow(guildId)],
             });
             return;
         }
 
-        // 2. Quick commands: "list" or "delete #<id>"
         if (question.toLowerCase() === 'list') {
             const listEmbed = await buildCommunityFaqListEmbed(client, guildId);
             await InteractionHelper.safeEditReply(interaction, {
                 embeds: [listEmbed],
-                components: [buildFaqActionRow(guildId)],
             });
             return;
         }
@@ -240,13 +242,23 @@ export default {
             return;
         }
 
-        // 3. Standard RAG + Community DB Question Answering
         const result = await answerUplandQuestion(client, guildId, question);
         const embed = buildAskResponseEmbed(question, result);
 
-        await InteractionHelper.safeEditReply(interaction, {
+        const sentReply = await InteractionHelper.safeEditReply(interaction, {
             embeds: [embed],
-            components: [buildFaqActionRow(guildId)],
         });
+
+        if (!result.answered && interaction.channelId) {
+            registerPendingQuestion({
+                guildId,
+                channelId: interaction.channelId,
+                question,
+                askerId: interaction.user.id,
+                askerTag: interaction.user.tag,
+                messageId: sentReply?.id || interaction.id,
+                botReplyId: sentReply?.id || null,
+            });
+        }
     },
 };
