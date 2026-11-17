@@ -1,54 +1,72 @@
-import { MessageFlags } from 'discord.js';
-import { successEmbed } from '../utils/embeds.js';
-import { verifyUser } from '../services/verificationService.js';
+import {
+    MessageFlags,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    ActionRowBuilder,
+} from 'discord.js';
+import { getGuildConfig } from '../services/config/guildConfig.js';
 import { handleInteractionError, replyUserError, ErrorTypes } from '../utils/errorHandler.js';
 import { logger } from '../utils/logger.js';
-import { InteractionHelper } from '../utils/interactionHelper.js';
 
 export async function handleVerificationButton(interaction, client) {
     try {
-        await InteractionHelper.safeDefer(interaction, { flags: MessageFlags.Ephemeral });
-
         if (!interaction.guild) {
-            return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'This button can only be used in a server.' });
+            return await replyUserError(interaction, {
+                type: ErrorTypes.UNKNOWN,
+                message: 'This button can only be used in a server.',
+            });
         }
 
         const guild = interaction.guild;
-        const userId = interaction.user.id;
+        const guildConfig = await getGuildConfig(client, guild.id);
 
-        logger.debug('User clicked verify button', {
-            guildId: guild.id,
-            userId,
-            userTag: interaction.user.tag
-        });
-
-        const result = await verifyUser(client, guild.id, userId, {
-            source: 'button_click',
-            moderatorId: null
-        });
-
-        if (result.status === 'already_verified') {
-            return await replyUserError(interaction, { type: ErrorTypes.VALIDATION, message: 'You are already verified and have access to all server channels.' });
+        if (!guildConfig?.verification?.enabled || !guildConfig?.verification?.roleId) {
+            return await replyUserError(interaction, {
+                type: ErrorTypes.CONFIGURATION,
+                message: 'The verification system is not currently configured on this server.',
+            });
         }
 
-        logger.info('User verified via button', {
-            guildId: guild.id,
-            userId,
-            roleName: result.roleName
-        });
+        if (interaction.member?.roles?.cache?.has(guildConfig.verification.roleId)) {
+            return await replyUserError(interaction, {
+                type: ErrorTypes.VALIDATION,
+                message: 'You are already verified and have access to all server channels.',
+            });
+        }
 
-        await InteractionHelper.safeEditReply(interaction, {
-            embeds: [successEmbed(
-                "✅ Verification Successful!",
-                `You have been verified and given the **${result.roleName}** role!\n\nYou now have access to all server channels and features. Welcome! 🎉`
-            )],
-        });
+        const modal = new ModalBuilder()
+            .setCustomId(`verify_upland_modal:${guild.id}`)
+            .setTitle('🦙 Upland Server Verification');
 
+        const usernameInput = new TextInputBuilder()
+            .setCustomId('upland_username')
+            .setLabel('Your In-Game Upland Username')
+            .setPlaceholder('Enter your exact Upland IGN (so members know who you are in-game)')
+            .setStyle(TextInputStyle.Short)
+            .setMinLength(2)
+            .setMaxLength(32)
+            .setRequired(true);
+
+        const homeCityInput = new TextInputBuilder()
+            .setCustomId('upland_home_city')
+            .setLabel('Home City / How You Found Us (Optional)')
+            .setPlaceholder('e.g., Miami Beach, Manhattan, or Referred by...')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(80)
+            .setRequired(false);
+
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(usernameInput),
+            new ActionRowBuilder().addComponents(homeCityInput),
+        );
+
+        await interaction.showModal(modal);
     } catch (error) {
         logger.error('Error in verification button handler', {
             error: error.message,
             guildId: interaction.guild?.id,
-            userId: interaction.user.id
+            userId: interaction.user.id,
         });
 
         await handleInteractionError(
@@ -60,6 +78,6 @@ export async function handleVerificationButton(interaction, client) {
 }
 
 export default {
-    customId: "verify_user",
-    execute: handleVerificationButton
+    customId: 'verify_user',
+    execute: handleVerificationButton,
 };

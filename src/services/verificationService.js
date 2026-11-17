@@ -7,6 +7,7 @@ import { getGuildConfig, setGuildConfig } from './config/guildConfig.js';
 import { createError, ErrorTypes } from '../utils/errorHandler.js';
 import { insertVerificationAudit } from '../utils/database.js';
 import { ensureTypedServiceError } from '../utils/serviceErrorBoundary.js';
+import { createEmbed } from '../utils/embeds.js';
 
 const verificationCooldowns = new Map();
 const attemptTracker = new Map();
@@ -29,7 +30,7 @@ const shouldKeepAuditTrail = verificationDefaults.keepAuditTrail ?? false;
 let lastCleanupAt = 0;
 
 export async function verifyUser(client, guildId, userId, options = {}) {
-    const { source = 'manual', moderatorId = null } = options;
+    const { source = 'manual', moderatorId = null, uplandUsername = null, homeCity = null } = options;
     
     try {
         
@@ -97,8 +98,35 @@ export async function verifyUser(client, guildId, userId, options = {}) {
             source,
             roleId: verifiedRole.id,
             roleName: verifiedRole.name,
-            moderatorId
+            moderatorId,
+            ...(uplandUsername ? { uplandUsername } : {}),
+            ...(homeCity ? { homeCity } : {}),
         });
+
+        if (uplandUsername) {
+            const logChannelId = guildConfig?.logging?.channels?.audit;
+            if (logChannelId) {
+                const logChannel = guild.channels.cache.get(logChannelId) ||
+                    await guild.channels.fetch(logChannelId).catch(() => null);
+                if (logChannel?.isTextBased()) {
+                    const fields = [
+                        { name: '👤 Discord User', value: `<@${userId}> (\`${member.user.tag}\`)`, inline: true },
+                        { name: '🦙 Upland Username', value: `**${uplandUsername}**`, inline: true },
+                    ];
+                    if (homeCity) {
+                        fields.push({ name: '🏙️ Home City / Notes', value: homeCity, inline: true });
+                    }
+                    logChannel.send({
+                        embeds: [createEmbed({
+                            title: '✅ Member Verified (Upland IGN Linked)',
+                            color: 'success',
+                            fields,
+                            footer: `User ID: ${userId}`,
+                        })],
+                    }).catch(() => {});
+                }
+            }
+        }
 
         logger.info('User verified successfully', {
             guildId,
