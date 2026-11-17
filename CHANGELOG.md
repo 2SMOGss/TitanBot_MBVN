@@ -7,6 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - **Render Blueprint ([render.yaml](render.yaml))**: Declarative 1-click Free Web Service deployment configuration wired to `/health` and `/ready`.
+- **Supabase External Keep-Alive Cron ([scripts/supabase-keepalive.sql](scripts/supabase-keepalive.sql))**: Configured `pg_cron` + `pg_net` (`titanbot_render_keepalive`, `*/13 * * * *`) inside Supabase PostgreSQL 17 to send external HTTP GET pings from AWS to Render's `/health` endpoint every 13 minutes, preventing Render Free tier idle spin-downs 24/7.
 - **13.5-Minute Self Keep-Alive ([src/app.js](src/app.js))**: Built-in external HTTPS keep-alive timer (`KEEP_ALIVE_INTERVAL_MS=810000`) targeting `KEEP_ALIVE_URL` / `RENDER_EXTERNAL_URL` so Free Web Service instances remain online 24/7 within the 750-hour monthly budget.
 - **Supabase PostgreSQL 17 Support**: Configured IPv4-compatible Supavisor pooler settings (`POSTGRES_SSL=true`) with Row Level Security (RLS) policies on all 17 tables.
 

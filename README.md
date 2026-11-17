@@ -39,7 +39,7 @@ flowchart LR
     end
 
     subgraph Infra["Managed Cloud Infrastructure"]
-        SUPA[("Supabase PostgreSQL 17<br/>17 RLS-Protected Tables<br/>(Supavisor Pooler)")]
+        SUPA[("Supabase PostgreSQL 17<br/>17 RLS-Protected Tables<br/>(pg_cron + pg_net Keep-Alive)")]
         LAVA["Lavalink v4 SSL Nodes<br/>(lavalink/nodes.json)"]
     end
 
@@ -47,6 +47,7 @@ flowchart LR
     APP --> REST
     APP --> HTTP
     KEEP -->|"HTTPS GET /health"| HTTP
+    SUPA -->|"pg_cron (*/13 min) GET /health"| HTTP
     APP --> DBW
     DBW <-->|"TLS Pool"| SUPA
     APP <-->|"Riffy v4"| LAVA
@@ -54,7 +55,7 @@ flowchart LR
 
 - **Multi-Guild Isolation**: Every server's configuration, economy, leveling, tickets, and moderation records are scoped by `guild_id` (`guild:{guildId}:...`).
 - **Graceful Degradation**: If PostgreSQL is temporarily unreachable, `DatabaseWrapper` falls back to in-memory storage and surfaces degraded status on `GET /ready` (`HTTP 503`).
-- **Built-in 13.5-Minute Keep-Alive**: Automatically pings `KEEP_ALIVE_URL` / `RENDER_EXTERNAL_URL` every `810,000 ms` (13.5 minutes) so free cloud web service containers never hit 15-minute idle spin-down limits.
+- **Dual Keep-Alive (Supabase External Cron + Built-in Timer)**: Supabase `pg_cron` + `pg_net` (`scripts/supabase-keepalive.sql`) sends an external `GET /health` request from AWS every 13 minutes (`*/13 * * * *`), complemented by the bot's internal `810,000 ms` (13.5-minute) `KEEP_ALIVE_URL` timer so Render Free Web Service instances never hit the 15-minute idle spin-down limit.
 
 ---
 
@@ -124,6 +125,9 @@ In the [Discord Developer Portal](https://discord.com/developers/applications):
 3. Verify deployment status:
    - Health check: `https://titanbot-mbvn.onrender.com/health`
    - Readiness & schema check: `https://titanbot-mbvn.onrender.com/ready`
+4. **Enable 24/7 External Keep-Alive (Supabase `pg_cron` + `pg_net`)**:
+   - Because Render's Free tier ignores internal self-pings when calculating idle spin-down, run [`scripts/supabase-keepalive.sql`](scripts/supabase-keepalive.sql) in the Supabase SQL Editor.
+   - This schedules `titanbot_render_keepalive` (`*/13 * * * *`) to ping `https://titanbot-mbvn.onrender.com/health` externally from Supabase's AWS infrastructure every 13 minutes, plus a daily cleanup job (`titanbot_cron_log_cleanup`).
 
 ---
 
