@@ -2,10 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
-import { PermissionFlagsBits } from 'discord.js';
+import { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { createEmbed } from '../utils/embeds.js';
-import { getGuildConfig } from './config/guildConfig.js';
+import { getGuildConfig, setConfigValue } from './config/guildConfig.js';
 import { memberHasModerationCommandAccess } from '../utils/permissionGuard.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +22,7 @@ const TOP_K_CHUNKS = Number(process.env.TOP_K_CHUNKS) || 3;
 
 const PENDING_QUESTION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const AUTO_ASK_COOLDOWN_MS = 12 * 1000; // 12s per user cooldown for passive auto-answers
+export const VETERAN_ANSWER_THRESHOLD = 25;
 
 const STOP_WORDS = new Set([
     'what', 'how', 'when', 'where', 'who', 'why', 'which', 'is', 'are', 'was', 'were',
@@ -366,6 +367,7 @@ export async function addCommunityAnswer(client, {
 
     if (pool) {
         await ensureGuildRow(pool, guildId);
+        const initialStatus = verified ? 'approved' : 'pending';
 
         const existing = await pool.query(
             `SELECT id FROM upland_faq_entries
@@ -382,19 +384,22 @@ export async function addCommunityAnswer(client, {
                      author_id = $3,
                      author_tag = $4,
                      verified = $5,
+                     status = $6,
+                     reviewed_by = NULL,
+                     reviewed_at = NULL,
                      updated_at = CURRENT_TIMESTAMP
-                 WHERE id = $6
+                 WHERE id = $7
                  RETURNING *`,
-                [cleanAnswer, keywords, String(authorId || ''), String(authorTag || ''), Boolean(verified), existing.rows[0].id]
+                [cleanAnswer, keywords, String(authorId || ''), String(authorTag || ''), Boolean(verified), initialStatus, existing.rows[0].id]
             );
             return { entry: updated.rows[0], updated: true };
         }
 
         const inserted = await pool.query(
-            `INSERT INTO upland_faq_entries (guild_id, question, answer, keywords, author_id, author_tag, verified)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO upland_faq_entries (guild_id, question, answer, keywords, author_id, author_tag, verified, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
-            [String(guildId), cleanQuestion, cleanAnswer, keywords, String(authorId || ''), String(authorTag || ''), Boolean(verified)]
+            [String(guildId), cleanQuestion, cleanAnswer, keywords, String(authorId || ''), String(authorTag || ''), Boolean(verified), initialStatus]
         );
         return { entry: inserted.rows[0], updated: false };
     }
@@ -412,6 +417,9 @@ export async function addCommunityAnswer(client, {
         author_tag: String(authorTag || ''),
         upvotes: 0,
         verified: Boolean(verified),
+        status: verified ? 'approved' : 'pending',
+        reviewed_by: null,
+        reviewed_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
     };
@@ -427,9 +435,9 @@ export async function searchCommunityAnswers(client, guildId, question, topK = 3
     if (pool) {
         try {
             const res = await pool.query(
-                `SELECT id, guild_id, question, answer, keywords, author_id, author_tag, upvotes, verified, updated_at
+                `SELECT id, guild_id, question, answer, keywords, author_id, author_tag, upvotes, verified, status, updated_at
                  FROM upland_faq_entries
-                 WHERE guild_id = $1
+                 WHERE guild_id = $1 AND COALESCE(status, 'pending') != 'disapproved'
                  ORDER BY verified DESC, upvotes DESC, updated_at DESC
                  LIMIT 200`,
                 [String(guildId)]
@@ -439,7 +447,8 @@ export async function searchCommunityAnswers(client, guildId, question, topK = 3
             logger.warn('Failed to query upland_faq_entries from PostgreSQL:', error.message);
         }
     } else if (client?.db?.get) {
-        rows = (await client.db.get(`guild:${guildId}:upland_faq_entries`, [])) || [];
+        const allRows = (await client.db.get(`guild:${guildId}:upland_faq_entries`, [])) || [];
+        rows = allRows.filter((r) => r.status !== 'disapproved');
     }
 
     if (!rows.length) return [];
@@ -491,7 +500,7 @@ export async function listCommunityAnswers(client, guildId, limit = 10) {
     const pool = getPgPool(client);
     if (pool) {
         const res = await pool.query(
-            `SELECT id, question, answer, author_id, author_tag, verified, upvotes, updated_at
+            `SELECT id, question, answer, author_id, author_tag, verified, status, reviewed_by, upvotes, updated_at
              FROM upland_faq_entries
              WHERE guild_id = $1
              ORDER BY updated_at DESC
@@ -503,6 +512,203 @@ export async function listCommunityAnswers(client, guildId, limit = 10) {
 
     const rows = (await client?.db?.get?.(`guild:${guildId}:upland_faq_entries`, [])) || [];
     return rows.slice(0, limit);
+}
+
+export async function getCommunityAnswerById(client, guildId, entryId) {
+    const pool = getPgPool(client);
+    if (pool) {
+        const res = await pool.query(
+            `SELECT * FROM upland_faq_entries WHERE guild_id = $1 AND id = $2 LIMIT 1`,
+            [String(guildId), Number(entryId)]
+        );
+        return res.rows[0] || null;
+    }
+
+    const rows = (await client?.db?.get?.(`guild:${guildId}:upland_faq_entries`, [])) || [];
+    return rows.find((r) => Number(r.id) === Number(entryId)) || null;
+}
+
+export async function reviewCommunityAnswer(client, guildId, entryId, status, reviewerId) {
+    const normalizedStatus = status === 'approved' ? 'approved' : 'disapproved';
+    const verified = normalizedStatus === 'approved';
+    const pool = getPgPool(client);
+
+    if (pool) {
+        const res = await pool.query(
+            `UPDATE upland_faq_entries
+             SET status = $1,
+                 verified = $2,
+                 reviewed_by = $3,
+                 reviewed_at = CURRENT_TIMESTAMP,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE guild_id = $4 AND id = $5
+             RETURNING *`,
+            [normalizedStatus, verified, String(reviewerId || ''), String(guildId), Number(entryId)]
+        );
+        return res.rows[0] || null;
+    }
+
+    const key = `guild:${guildId}:upland_faq_entries`;
+    const rows = (await client?.db?.get?.(key, [])) || [];
+    const idx = rows.findIndex((r) => Number(r.id) === Number(entryId));
+    if (idx === -1) return null;
+    rows[idx] = {
+        ...rows[idx],
+        status: normalizedStatus,
+        verified,
+        reviewed_by: String(reviewerId || ''),
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+    };
+    await client?.db?.set?.(key, rows);
+    return rows[idx];
+}
+
+export async function resolveOrCreateVeteranRole(client, guild, guildConfig) {
+    if (!guild) return null;
+    const configuredId = guildConfig?.veteranRole;
+    if (configuredId) {
+        const existingById = guild.roles.cache.get(configuredId) ||
+            await guild.roles.fetch(configuredId).catch(() => null);
+        if (existingById) return existingById;
+    }
+
+    const roles = guild.roles.cache.size > 0
+        ? guild.roles.cache
+        : await guild.roles.fetch().catch(() => guild.roles.cache);
+
+    const existingByName = roles.find((r) => r.name.toLowerCase() === 'veteran');
+    if (existingByName) {
+        if (client && configuredId !== existingByName.id) {
+            await setConfigValue(client, guild.id, 'veteranRole', existingByName.id).catch(() => {});
+        }
+        return existingByName;
+    }
+
+    const botMember = guild.members.me;
+    if (!botMember?.permissions?.has(PermissionFlagsBits.ManageRoles)) {
+        return null;
+    }
+
+    try {
+        const created = await guild.roles.create({
+            name: 'Veteran',
+            color: 0xF1C40F,
+            reason: 'Auto-created Veteran role for members who answer 25+ Upland FAQ questions',
+        });
+        if (client) {
+            await setConfigValue(client, guild.id, 'veteranRole', created.id).catch(() => {});
+        }
+        return created;
+    } catch (error) {
+        logger.warn(`Could not auto-create Veteran role in guild ${guild.id}:`, error.message);
+        return null;
+    }
+}
+
+export function memberHasVeteranAccess(member, guildConfig) {
+    if (!member) return false;
+    if (memberHasModerationCommandAccess(member, guildConfig, PermissionFlagsBits.ManageMessages)) {
+        return true;
+    }
+    const veteranRoleId = guildConfig?.veteranRole;
+    if (veteranRoleId && member.roles?.cache?.has(veteranRoleId)) {
+        return true;
+    }
+    return Boolean(member.roles?.cache?.some((r) => r.name.toLowerCase() === 'veteran'));
+}
+
+export async function incrementContributorAndMaybeAwardVeteran(client, guild, member, guildConfig) {
+    if (!guild || !member) return { answersCount: 0, newlyAwarded: false, veteranRole: null };
+    const guildId = guild.id;
+    const userId = member.id;
+    const pool = getPgPool(client);
+    let answersCount = 0;
+    let alreadyAwarded = false;
+
+    if (pool) {
+        await ensureGuildRow(pool, guildId);
+        const res = await pool.query(
+            `INSERT INTO upland_faq_contributors (guild_id, user_id, answers_count)
+             VALUES ($1, $2, 1)
+             ON CONFLICT (guild_id, user_id)
+             DO UPDATE SET answers_count = upland_faq_contributors.answers_count + 1,
+                           updated_at = CURRENT_TIMESTAMP
+             RETURNING answers_count, veteran_awarded_at`,
+            [String(guildId), String(userId)]
+        );
+        answersCount = Number(res.rows[0]?.answers_count || 1);
+        alreadyAwarded = Boolean(res.rows[0]?.veteran_awarded_at);
+    } else if (client?.db) {
+        const key = `guild:${guildId}:upland_faq_contributors`;
+        const map = (await client.db.get(key, {})) || {};
+        const prev = map[userId] || { answers_count: 0, veteran_awarded_at: null };
+        answersCount = Number(prev.answers_count || 0) + 1;
+        alreadyAwarded = Boolean(prev.veteran_awarded_at);
+        map[userId] = { answers_count: answersCount, veteran_awarded_at: prev.veteran_awarded_at };
+        await client.db.set(key, map);
+    }
+
+    if (answersCount < VETERAN_ANSWER_THRESHOLD) {
+        return { answersCount, newlyAwarded: false, veteranRole: null };
+    }
+
+    const veteranRole = await resolveOrCreateVeteranRole(client, guild, guildConfig);
+    if (!veteranRole) {
+        return { answersCount, newlyAwarded: false, veteranRole: null };
+    }
+
+    const hasRole = member.roles?.cache?.has(veteranRole.id);
+    let newlyAwarded = false;
+
+    if (!hasRole) {
+        const botTopPos = guild.members.me?.roles?.highest?.position ?? 0;
+        if (veteranRole.position < botTopPos) {
+            await member.roles.add(veteranRole, `Answered ${answersCount} community FAQ questions`).catch((err) => {
+                logger.warn(`Failed to assign Veteran role to ${member.id} in ${guildId}:`, err.message);
+            });
+            newlyAwarded = !alreadyAwarded;
+        }
+    }
+
+    if (!alreadyAwarded && pool) {
+        await pool.query(
+            `UPDATE upland_faq_contributors SET veteran_awarded_at = CURRENT_TIMESTAMP WHERE guild_id = $1 AND user_id = $2`,
+            [String(guildId), String(userId)]
+        ).catch(() => {});
+    }
+
+    return { answersCount, newlyAwarded, veteranRole };
+}
+
+export function buildFaqReviewRow(guildId, entryId) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`faq_review_approve:${guildId}:${entryId}`)
+            .setLabel('Approve')
+            .setEmoji('✅')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`faq_review_disapprove:${guildId}:${entryId}`)
+            .setLabel('Disapprove')
+            .setEmoji('❌')
+            .setStyle(ButtonStyle.Danger),
+    );
+}
+
+export function buildModReviewRow(guildId, entryId) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`faq_mod_approve:${guildId}:${entryId}`)
+            .setLabel('Restore / Approve')
+            .setEmoji('✅')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`faq_mod_delete:${guildId}:${entryId}`)
+            .setLabel('Delete Entry')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Danger),
+    );
 }
 
 export async function deleteCommunityAnswer(client, guildId, entryId) {
@@ -797,7 +1003,17 @@ async function verifyAndDistillCommunityAnswer(question, candidateMessage) {
 /**
  * Post an audit card to the server's configured #bot-logs channel when a new FAQ is self-learned.
  */
-async function logLearnedFaqToAuditChannel(client, guild, guildConfig, entry, askerId, answerer, channelId, updated) {
+async function logLearnedFaqToAuditChannel(
+    client,
+    guild,
+    guildConfig,
+    entry,
+    askerId,
+    answerer,
+    channelId,
+    updated,
+    contributorInfo = {}
+) {
     try {
         const logChannelId = guildConfig?.logging?.channels?.audit;
         if (!logChannelId || !guild) return;
@@ -806,10 +1022,15 @@ async function logLearnedFaqToAuditChannel(client, guild, guildConfig, entry, as
             await guild.channels.fetch(logChannelId).catch(() => null);
         if (!logChannel || !logChannel.isTextBased()) return;
 
+        const answersCount = contributorInfo.answersCount || 0;
+        const progressText = answersCount >= VETERAN_ANSWER_THRESHOLD
+            ? `${answersCount} answers (🏅 Veteran)`
+            : `${answersCount}/${VETERAN_ANSWER_THRESHOLD} toward Veteran`;
+
         const embed = createEmbed({
             title: `🧠 Self-Healing FAQ ${updated ? 'Updated' : 'Learned'} (#${entry.id})`,
             description: `TitanBot detected an unanswered question in <#${channelId}> and learned the answer from a community member.`,
-            color: 'success',
+            color: 'info',
             fields: [
                 {
                     name: '❓ Question',
@@ -828,14 +1049,36 @@ async function logLearnedFaqToAuditChannel(client, guild, guildConfig, entry, as
                 },
                 {
                     name: '🎓 Answered By',
-                    value: `<@${answerer.id}> (${entry.verified ? '✅ Staff/Mod' : '👥 Community'})`,
+                    value: `<@${answerer.id}> (${progressText})`,
                     inline: true,
                 },
+                {
+                    name: '📋 Review Status',
+                    value: entry.verified
+                        ? '✅ Auto-Verified (Staff)'
+                        : '⏳ Pending Veteran / Mod Review (Veterans can Approve or Disapprove below)',
+                    inline: false,
+                },
             ],
-            footer: `To remove this entry if inaccurate, run /ask question: delete #${entry.id}`,
+            footer: `Entry #${entry.id} • Veterans: Approve or Disapprove (cannot delete) • Mods/Admins: full control`,
         });
 
-        await logChannel.send({ embeds: [embed] });
+        await logChannel.send({
+            embeds: [embed],
+            components: [buildFaqReviewRow(guild.id, entry.id)],
+        });
+
+        if (contributorInfo.newlyAwarded && contributorInfo.veteranRole) {
+            await logChannel.send({
+                embeds: [
+                    createEmbed({
+                        title: '🏅 New Veteran Unlocked!',
+                        description: `<@${answerer.id}> just answered **${VETERAN_ANSWER_THRESHOLD}** community questions and earned the ${contributorInfo.veteranRole} role! They can now Approve or Disapprove logged FAQ entries.`,
+                        color: 'success',
+                    }),
+                ],
+            }).catch(() => {});
+        }
     } catch (error) {
         logger.debug('Failed to send self-healing FAQ log to audit channel:', error.message);
     }
@@ -926,9 +1169,28 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
                 );
                 pendingChannelQuestions.set(channelId, remaining);
 
-                logger.info(
-                    `[FAQ Self-Heal] Learned FAQ #${entry.id} in guild ${guildId} from ${message.author.tag}: Q="${entry.question}"`
+                const contributorInfo = await incrementContributorAndMaybeAwardVeteran(
+                    client,
+                    message.guild,
+                    message.member,
+                    guildConfig
                 );
+
+                logger.info(
+                    `[FAQ Self-Heal] Learned FAQ #${entry.id} in guild ${guildId} from ${message.author.tag} (count=${contributorInfo.answersCount}): Q="${entry.question}"`
+                );
+
+                if (contributorInfo.newlyAwarded && contributorInfo.veteranRole) {
+                    await message.channel.send({
+                        embeds: [
+                            createEmbed({
+                                title: '🏅 Veteran Role Unlocked!',
+                                description: `Congrats <@${message.author.id}>! You've answered **${VETERAN_ANSWER_THRESHOLD}** community questions and earned the ${contributorInfo.veteranRole} role!`,
+                                color: 'success',
+                            }),
+                        ],
+                    }).catch(() => {});
+                }
 
                 await logLearnedFaqToAuditChannel(
                     client,
@@ -938,7 +1200,8 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
                     matchedPending.askerId,
                     message.author,
                     channelId,
-                    updated
+                    updated,
+                    contributorInfo
                 );
                 return true;
             }

@@ -4,9 +4,21 @@ import {
     TextInputStyle,
     ActionRowBuilder,
     MessageFlags,
+    PermissionFlagsBits,
 } from 'discord.js';
 import { buildCommunityFaqListEmbed, buildFaqActionRow } from '../../../commands/Community/ask.js';
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
+import { getGuildConfig } from '../../../services/config/guildConfig.js';
+import { memberHasModerationCommandAccess } from '../../../utils/permissionGuard.js';
+import { createEmbed } from '../../../utils/embeds.js';
+import {
+    memberHasVeteranAccess,
+    reviewCommunityAnswer,
+    deleteCommunityAnswer,
+    getCommunityAnswerById,
+    buildFaqReviewRow,
+    buildModReviewRow,
+} from '../../../services/uplandFaqService.js';
 
 const faqTeachButton = {
     name: 'faq_teach',
@@ -64,4 +76,209 @@ const faqListButton = {
     },
 };
 
-export default [faqTeachButton, faqListButton];
+function buildUpdatedReviewEmbed(entry, statusLabel, color, footerText) {
+    return createEmbed({
+        title: `🧠 Community FAQ #${entry.id} — ${statusLabel}`,
+        color,
+        fields: [
+            {
+                name: '❓ Question',
+                value: String(entry.question).slice(0, 1024),
+                inline: false,
+            },
+            {
+                name: '💡 Answer',
+                value: String(entry.answer).slice(0, 1024),
+                inline: false,
+            },
+            {
+                name: '🎓 Original Author',
+                value: entry.author_id ? `<@${entry.author_id}>` : (entry.author_tag || 'Community Member'),
+                inline: true,
+            },
+            {
+                name: '📋 Status',
+                value: statusLabel,
+                inline: true,
+            },
+        ],
+        footer: footerText,
+    });
+}
+
+const faqReviewApproveButton = {
+    name: 'faq_review_approve',
+    async execute(interaction, client, args) {
+        const guildId = args?.[0] || interaction.guildId;
+        const entryId = Number(args?.[1]);
+        const guildConfig = await getGuildConfig(client, guildId);
+
+        if (!memberHasVeteranAccess(interaction.member, guildConfig)) {
+            return interaction.reply({
+                embeds: [createEmbed({
+                    title: 'Veteran or Staff Role Required',
+                    description: 'Only **Veterans** (25+ answered questions), **Moderators**, or **Admins** can approve FAQ entries.',
+                    color: 'error',
+                })],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const updated = await reviewCommunityAnswer(client, guildId, entryId, 'approved', interaction.user.id);
+        if (!updated) {
+            return interaction.reply({
+                embeds: [createEmbed({ title: 'Not Found', description: `FAQ entry #${entryId} no longer exists.`, color: 'warning' })],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const embed = buildUpdatedReviewEmbed(
+            updated,
+            `✅ Approved by ${interaction.user.tag}`,
+            'success',
+            `Entry #${updated.id} • Active in FAQ Database`
+        );
+
+        await interaction.update({
+            content: null,
+            embeds: [embed],
+            components: [buildFaqReviewRow(guildId, entryId)],
+        });
+    },
+};
+
+const faqReviewDisapproveButton = {
+    name: 'faq_review_disapprove',
+    async execute(interaction, client, args) {
+        const guildId = args?.[0] || interaction.guildId;
+        const entryId = Number(args?.[1]);
+        const guildConfig = await getGuildConfig(client, guildId);
+
+        if (!memberHasVeteranAccess(interaction.member, guildConfig)) {
+            return interaction.reply({
+                embeds: [createEmbed({
+                    title: 'Veteran or Staff Role Required',
+                    description: 'Only **Veterans** (25+ answered questions), **Moderators**, or **Admins** can disapprove FAQ entries.',
+                    color: 'error',
+                })],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const updated = await reviewCommunityAnswer(client, guildId, entryId, 'disapproved', interaction.user.id);
+        if (!updated) {
+            return interaction.reply({
+                embeds: [createEmbed({ title: 'Not Found', description: `FAQ entry #${entryId} no longer exists.`, color: 'warning' })],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const modPing = guildConfig?.modRole ? `<@&${guildConfig.modRole}> ` : '';
+        const embed = buildUpdatedReviewEmbed(
+            updated,
+            `⚠️ Disapproved by ${interaction.user.tag} — Needs Admin/Mod Review`,
+            'warning',
+            `Entry #${updated.id} paused from FAQ replies • Only Admins/Mods can Restore or Delete`
+        );
+
+        await interaction.update({
+            content: `${modPing}⚠️ **FAQ #${updated.id}** was disapproved by <@${interaction.user.id}> and requires **Admin / Moderator** review:`,
+            embeds: [embed],
+            components: [buildModReviewRow(guildId, entryId)],
+        });
+    },
+};
+
+const faqModApproveButton = {
+    name: 'faq_mod_approve',
+    async execute(interaction, client, args) {
+        const guildId = args?.[0] || interaction.guildId;
+        const entryId = Number(args?.[1]);
+        const guildConfig = await getGuildConfig(client, guildId);
+
+        if (!memberHasModerationCommandAccess(interaction.member, guildConfig, PermissionFlagsBits.ManageMessages)) {
+            return interaction.reply({
+                embeds: [createEmbed({
+                    title: 'Moderator / Admin Only',
+                    description: 'Disapproved entries are locked for **Admin / Moderator** review. Veterans cannot override or delete them.',
+                    color: 'error',
+                })],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const updated = await reviewCommunityAnswer(client, guildId, entryId, 'approved', interaction.user.id);
+        if (!updated) {
+            return interaction.reply({
+                embeds: [createEmbed({ title: 'Not Found', description: `FAQ entry #${entryId} no longer exists.`, color: 'warning' })],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const embed = buildUpdatedReviewEmbed(
+            updated,
+            `✅ Restored & Approved by ${interaction.user.tag}`,
+            'success',
+            `Entry #${updated.id} • Active in FAQ Database`
+        );
+
+        await interaction.update({
+            content: null,
+            embeds: [embed],
+            components: [buildFaqReviewRow(guildId, entryId)],
+        });
+    },
+};
+
+const faqModDeleteButton = {
+    name: 'faq_mod_delete',
+    async execute(interaction, client, args) {
+        const guildId = args?.[0] || interaction.guildId;
+        const entryId = Number(args?.[1]);
+        const guildConfig = await getGuildConfig(client, guildId);
+
+        if (!memberHasModerationCommandAccess(interaction.member, guildConfig, PermissionFlagsBits.ManageMessages)) {
+            return interaction.reply({
+                embeds: [createEmbed({
+                    title: 'Moderator / Admin Only',
+                    description: 'Only **Moderators** or **Admins** can delete FAQ entries. Veterans can only Approve or Disapprove.',
+                    color: 'error',
+                })],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const existing = await getCommunityAnswerById(client, guildId, entryId);
+        const removed = await deleteCommunityAnswer(client, guildId, entryId);
+        const target = removed || existing;
+
+        if (!target) {
+            return interaction.reply({
+                embeds: [createEmbed({ title: 'Already Deleted', description: `FAQ entry #${entryId} was already removed.`, color: 'info' })],
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const embed = buildUpdatedReviewEmbed(
+            target,
+            `🗑️ Deleted by ${interaction.user.tag}`,
+            'error',
+            `Entry #${entryId} permanently removed from PostgreSQL`
+        );
+
+        await interaction.update({
+            content: null,
+            embeds: [embed],
+            components: [],
+        });
+    },
+};
+
+export default [
+    faqTeachButton,
+    faqListButton,
+    faqReviewApproveButton,
+    faqReviewDisapproveButton,
+    faqModApproveButton,
+    faqModDeleteButton,
+];

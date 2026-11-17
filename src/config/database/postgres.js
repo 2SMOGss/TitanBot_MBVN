@@ -17,6 +17,7 @@ const configuredTables = {
     application_roles: 'application_roles',
     verification_audit: 'verification_audit',
     upland_faq_entries: 'upland_faq_entries',
+    upland_faq_contributors: 'upland_faq_contributors',
     temp_data: 'temp_data',
     cache_data: 'cache_data',
 };
@@ -37,6 +38,7 @@ const allowedTableIdentifiers = new Set([
     'application_roles',
     'verification_audit',
     'upland_faq_entries',
+    'upland_faq_contributors',
     'temp_data',
     'cache_data',
 ]);
