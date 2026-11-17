@@ -35,6 +35,19 @@ export default {
         return;
       }
 
+      if (client.user && message.mentions.has(client.user) && !message.mentions.everyone) {
+        const mentionPattern = new RegExp(`^<@!?${client.user.id}>\\s*(.*)$`, 's');
+        const match = message.content.trim().match(mentionPattern);
+        if (match) {
+          const askCommand = client.commands.get('ask');
+          if (askCommand?.prefixExecute) {
+            const questionArgs = match[1].trim() ? match[1].trim().split(/\s+/) : [];
+            await askCommand.prefixExecute(message, questionArgs);
+            return;
+          }
+        }
+      }
+
       await handlePrefixCommand(message, client);
 
       await handleLeveling(message, client);

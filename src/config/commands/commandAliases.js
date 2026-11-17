@@ -104,6 +104,10 @@ export const commandAliases = {
 
     'np': 'nowplaying',
     'now': 'nowplaying',
+
+    'ask': 'ask',
+    'upland': 'ask',
+    'faq': 'ask',
 };
 
 export const subcommandAliases = {

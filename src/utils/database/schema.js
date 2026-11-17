@@ -160,6 +160,21 @@ export const tableStatements = [
         FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE
     )`,
 
+    `CREATE TABLE IF NOT EXISTS ${t.upland_faq_entries} (
+        id SERIAL PRIMARY KEY,
+        guild_id VARCHAR(20) NOT NULL,
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        keywords TEXT DEFAULT '',
+        author_id VARCHAR(20),
+        author_tag VARCHAR(100),
+        upvotes INTEGER DEFAULT 0,
+        verified BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (guild_id) REFERENCES ${t.guilds}(id) ON DELETE CASCADE
+    )`,
+
     `CREATE TABLE IF NOT EXISTS ${t.temp_data} (
         key VARCHAR(255) PRIMARY KEY,
         value JSONB NOT NULL,
@@ -192,6 +207,8 @@ export const indexStatements = [
     `CREATE INDEX IF NOT EXISTS idx_verification_audit_guild_id ON ${t.verification_audit}(guild_id)`,
     `CREATE INDEX IF NOT EXISTS idx_verification_audit_user_id ON ${t.verification_audit}(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_verification_audit_created_at ON ${t.verification_audit}(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_guild_id ON ${t.upland_faq_entries}(guild_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_created_at ON ${t.upland_faq_entries}(created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_temp_data_expires_at ON ${t.temp_data}(expires_at)`,
     `CREATE INDEX IF NOT EXISTS idx_cache_data_expires_at ON ${t.cache_data}(expires_at)`,
 ];
@@ -224,4 +241,5 @@ export const triggerDefinitions = [
     { name: 'update_giveaways_updated_at', table: t.giveaways },
     { name: 'update_tickets_updated_at', table: t.tickets },
     { name: 'update_afk_status_updated_at', table: t.afk_status },
+    { name: 'update_upland_faq_entries_updated_at', table: t.upland_faq_entries },
 ];

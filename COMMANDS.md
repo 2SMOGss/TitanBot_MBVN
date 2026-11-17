@@ -106,7 +106,8 @@ If you want a clean, focused server while you finish setting up, you can tempora
 ### 10. 📊 Server Stats (1 Command)
 - **`/serverstats`** — Create auto-updating voice channel counters at the top of your server (e.g., `Members: 120`, `Bots: 4`, updated every 15 mins).
 
-### 11. 📝 Community Applications (2 Commands)
+### 11. 📝 Community & Upland FAQ (3 Commands)
+- **`/ask`** (`question`, optional `teach_answer`) — Ask any question about Upland (searches both the **PostgreSQL Community Answers Database** and **Official Upland Documentation**), or click **💡 Teach / Submit Answer** to save player answers to the database. Also works via `!ask`, `!upland`, or `@bot` mentions.
 - **`/app-admin`** (`setup`, `review`, `list`, `dashboard`) — Create custom application forms (e.g., Moderator Application) and review submissions with Approve/Deny buttons.
 - **`/apply`** (`submit`, `status`, `list`) — Used by members to apply for open positions/roles.
 
