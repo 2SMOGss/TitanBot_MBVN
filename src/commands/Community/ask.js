@@ -114,8 +114,19 @@ export default {
         ),
     category: 'Community',
 
-    async prefixExecute(interaction, args) {
-        const rawQuestion = Array.isArray(args) ? args.join(' ').trim() : '';
+    async prefixExecute(interaction, argsOrConfig) {
+        let rawQuestion = '';
+        if (Array.isArray(argsOrConfig)) {
+            rawQuestion = argsOrConfig.join(' ').trim();
+        } else if (Array.isArray(interaction?.options?._hoistedOptions)) {
+            rawQuestion = interaction.options._hoistedOptions
+                .map((opt) => opt.value)
+                .join(' ')
+                .trim();
+        } else if (typeof interaction?.options?.getString === 'function') {
+            rawQuestion = (interaction.options.getString('question') || '').trim();
+        }
+
         const guildId = interaction.guildId || interaction.guild?.id || 'global';
 
         if (!rawQuestion) {
