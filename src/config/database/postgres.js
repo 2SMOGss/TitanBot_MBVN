@@ -52,41 +52,49 @@ const validatedTables = Object.fromEntries(
 
 const DEFAULT_POSTGRES_URL = 'postgresql://localhost:5432/titanbot';
 
-export function resolveSslConfig() {
-    const sslEnv = process.env.POSTGRES_SSL?.toLowerCase();
+export function resolveSslConfig(env = process.env) {
+    const sslEnv = env.POSTGRES_SSL?.toLowerCase();
     if (sslEnv === 'false' || sslEnv === '0') {
         return false;
     }
+
+    const rawRejectUnauthorized = String(env.POSTGRES_SSL_REJECT_UNAUTHORIZED ?? '').trim().toLowerCase();
+    const rejectUnauthorized = rawRejectUnauthorized === 'true' || rawRejectUnauthorized === '1';
+
     if (sslEnv === 'true' || sslEnv === '1') {
-        return { rejectUnauthorized: false };
+        return { rejectUnauthorized };
     }
 
-    const url = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
+    const url = env.POSTGRES_URL || env.DATABASE_URL || '';
     if (/sslmode=(require|verify-ca|verify-full|prefer)/i.test(url)) {
-        return { rejectUnauthorized: false };
+        return { rejectUnauthorized };
     }
 
-    if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
-        return { rejectUnauthorized: false };
+    if (env.RAILWAY_ENVIRONMENT || env.RAILWAY_PROJECT_ID) {
+        return { rejectUnauthorized };
     }
 
-    if (process.env.NODE_ENV === 'production') {
-        return { rejectUnauthorized: false };
+    if (env.NODE_ENV === 'production') {
+        return { rejectUnauthorized };
+    }
+
+    if (rawRejectUnauthorized === 'true' || rawRejectUnauthorized === '1') {
+        return { rejectUnauthorized: true };
     }
 
     return false;
 }
 
-export function resolvePostgresPoolConfig() {
-    const ssl = resolveSslConfig();
-    const url = (process.env.POSTGRES_URL || process.env.DATABASE_URL || '').trim();
+export function resolvePostgresPoolConfig(env = process.env) {
+    const ssl = resolveSslConfig(env);
+    const url = (env.POSTGRES_URL || env.DATABASE_URL || '').trim();
     const sharedOptions = {
-        max: parseInt(process.env.POSTGRES_MAX_CONNECTIONS) || 20,
-        min: parseInt(process.env.POSTGRES_MIN_CONNECTIONS) || 2,
-        idleTimeoutMillis: parseInt(process.env.POSTGRES_IDLE_TIMEOUT) || 30000,
-        connectionTimeoutMillis: parseInt(process.env.POSTGRES_CONNECTION_TIMEOUT) || 10000,
+        max: parseInt(env.POSTGRES_MAX_CONNECTIONS) || 20,
+        min: parseInt(env.POSTGRES_MIN_CONNECTIONS) || 2,
+        idleTimeoutMillis: parseInt(env.POSTGRES_IDLE_TIMEOUT) || 30000,
+        connectionTimeoutMillis: parseInt(env.POSTGRES_CONNECTION_TIMEOUT) || 10000,
         application_name: 'titanbot',
-        statement_timeout: process.env.NODE_ENV === 'production' ? 30000 : 0,
+        statement_timeout: env.NODE_ENV === 'production' ? 30000 : 0,
         keepalives: 1,
         keepalives_idle: 30,
         ssl,
@@ -97,11 +105,11 @@ export function resolvePostgresPoolConfig() {
     }
 
     return {
-        host: process.env.POSTGRES_HOST || 'localhost',
-        port: parseInt(process.env.POSTGRES_PORT) || 5432,
-        database: process.env.POSTGRES_DB || 'titanbot',
-        user: process.env.POSTGRES_USER || 'postgres',
-        password: (process.env.POSTGRES_PASSWORD || '').toString(),
+        host: env.POSTGRES_HOST || 'localhost',
+        port: parseInt(env.POSTGRES_PORT) || 5432,
+        database: env.POSTGRES_DB || 'titanbot',
+        user: env.POSTGRES_USER || 'postgres',
+        password: (env.POSTGRES_PASSWORD || '').toString(),
         ...sharedOptions,
     };
 }

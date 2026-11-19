@@ -49,7 +49,7 @@ export default {
         const cityDisplay = name;
 
         const weatherResponse = await fetch(
-            `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current_weather=true`,
+            `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current_weather=true&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code`,
         );
         const weatherData = await weatherResponse.json();
 
@@ -64,11 +64,15 @@ export default {
             return;
         }
 
-        const current = weatherData.current || weatherData.current_weather || {};
-        const temperature = current.temperature != null ? Math.round(current.temperature) : "N/A";
-        const humidity = current.relativehumidity ?? current.relative_humidity_2m ?? "N/A";
-        const windSpeed = current.windspeed != null ? Math.round(current.windspeed) : "N/A";
-        const weatherCode = current.weathercode ?? current.weather_code ?? null;
+        const current = weatherData.current || {};
+        const currentWeather = weatherData.current_weather || {};
+        const rawTemp = current.temperature_2m ?? current.temperature ?? currentWeather.temperature;
+        const temperature = rawTemp != null ? Math.round(rawTemp) : "N/A";
+        const rawHumidity = current.relative_humidity_2m ?? current.relativehumidity ?? currentWeather.relativehumidity;
+        const humidityDisplay = rawHumidity != null && rawHumidity !== "N/A" ? `${rawHumidity}%` : "N/A";
+        const rawWind = current.wind_speed_10m ?? current.windspeed ?? currentWeather.windspeed;
+        const windSpeed = rawWind != null ? Math.round(rawWind) : "N/A";
+        const weatherCode = current.weather_code ?? current.weathercode ?? currentWeather.weathercode ?? currentWeather.weather_code ?? null;
 
         const condition = getWeatherDescription(weatherCode);
 
@@ -76,17 +80,17 @@ export default {
             .addFields(
                 {
                     name: "Temperature",
-                    value: `${temperature}°C`,
+                    value: temperature === "N/A" ? "N/A" : `${temperature}°C`,
                     inline: true,
                 },
                 {
                     name: "Humidity",
-                    value: `${humidity}%`,
+                    value: humidityDisplay,
                     inline: true,
                 },
                 {
                     name: "Wind Speed",
-                    value: `${windSpeed} km/h`,
+                    value: windSpeed === "N/A" ? "N/A" : `${windSpeed} km/h`,
                     inline: true,
                 },
             )

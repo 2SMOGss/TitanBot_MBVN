@@ -100,7 +100,10 @@ export default {
             });
         }
 
-        const sentMessage = await channel.send({ content: message });
+        const sentMessage = await channel.send({
+            content: message,
+            allowedMentions: { parse: ['users'] },
+        });
 
         await logEvent({
             client,

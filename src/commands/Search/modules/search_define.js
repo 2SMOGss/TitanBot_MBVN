@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { createEmbed } from '../../../utils/embeds.js';
 import { logger } from '../../../utils/logger.js';
 import { handleInteractionError, replyUserError, ErrorTypes } from '../../../utils/errorHandler.js';
@@ -23,16 +22,28 @@ export default {
                 return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'Please enter a word with at least 2 characters.' });
             }
 
-            const response = await axios.get(
+            const response = await fetch(
                 `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
-                { timeout: 5000 }
+                { signal: AbortSignal.timeout(8000) }
             );
 
-            if (!response.data || response.data.length === 0) {
+            if (response.status === 404) {
                 return await replyUserError(interaction, { type: ErrorTypes.USER_INPUT, message: `No definitions found for "${word}".` });
             }
 
-            const data = response.data[0];
+            if (!response.ok) {
+                const httpError = new Error(`Dictionary API returned HTTP ${response.status}`);
+                httpError.status = response.status;
+                throw httpError;
+            }
+
+            const responseData = await response.json();
+
+            if (!Array.isArray(responseData) || responseData.length === 0) {
+                return await replyUserError(interaction, { type: ErrorTypes.USER_INPUT, message: `No definitions found for "${word}".` });
+            }
+
+            const data = responseData[0];
             const embed = createEmbed({
                 title: data.word,
                 description: data.phonetic ? `*${data.phonetic}*` : '',
@@ -81,7 +92,7 @@ export default {
                 commandName: 'define'
             });
 
-            if (error.response?.status === 404) {
+            if (error.status === 404 || error.response?.status === 404) {
                 await replyUserError(interaction, { type: ErrorTypes.USER_INPUT, message: `No definitions found for "${interaction.options.getString('word')}".` });
             } else {
                 await handleInteractionError(interaction, error, {

@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { createEmbed } from '../../../utils/embeds.js';
 import { logger } from '../../../utils/logger.js';
 import { handleInteractionError, replyUserError, ErrorTypes } from '../../../utils/errorHandler.js';
@@ -36,17 +35,37 @@ export default {
                 });
             }, 1500);
 
-            const response = await axios.get(
-                `https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(term)}`,
-                { timeout: 5000 }
-            );
-            clearDeferTimer();
+            let response;
+            try {
+                response = await fetch(
+                    `https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(term)}`,
+                    { signal: AbortSignal.timeout(8000) }
+                );
+            } finally {
+                clearDeferTimer();
+            }
 
-            if (!response.data?.list?.length) {
+            if (response.status === 404) {
                 return await replyUserError(interaction, { type: ErrorTypes.USER_INPUT, message: `No definitions found for "${term}" on Urban Dictionary.` });
             }
 
-            const definition = response.data.list[0];
+            if (response.status === 429) {
+                return await replyUserError(interaction, { type: ErrorTypes.RATE_LIMIT, message: 'Too many requests to Urban Dictionary. Please try again in a few minutes.' });
+            }
+
+            if (!response.ok) {
+                const httpError = new Error(`Urban Dictionary API returned HTTP ${response.status}`);
+                httpError.status = response.status;
+                throw httpError;
+            }
+
+            const responseData = await response.json();
+
+            if (!responseData?.list?.length) {
+                return await replyUserError(interaction, { type: ErrorTypes.USER_INPUT, message: `No definitions found for "${term}" on Urban Dictionary.` });
+            }
+
+            const definition = responseData.list[0];
             const cleanDefinition = definition.definition.replace(/\[|\]/g, '');
             const cleanExample = definition.example.replace(/\[|\]/g, '');
 
@@ -102,13 +121,14 @@ export default {
                 userId: interaction.user.id,
                 term: interaction.options.getString('term'),
                 guildId: interaction.guildId,
-                apiStatus: error.response?.status,
+                apiStatus: error.status || error.response?.status,
                 commandName: 'urban'
             });
 
-            if (error.response?.status === 404 || !error.response) {
+            const status = error.status || error.response?.status;
+            if (status === 404 || (!status && error.name !== 'TimeoutError' && error.name !== 'AbortError')) {
                 await replyUserError(interaction, { type: ErrorTypes.USER_INPUT, message: `No definitions found for "${interaction.options.getString('term')}" on Urban Dictionary.` });
-            } else if (error.response?.status === 429) {
+            } else if (status === 429) {
                 await replyUserError(interaction, { type: ErrorTypes.RATE_LIMIT, message: 'Too many requests to Urban Dictionary. Please try again in a few minutes.' });
             } else {
                 await handleInteractionError(interaction, error, {

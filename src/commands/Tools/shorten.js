@@ -5,6 +5,21 @@ import { replyUserError, ErrorTypes } from '../../utils/errorHandler.js';
 import { getColor } from '../../config/bot.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 
+export function validateShortenUrl(urlInput) {
+    if (!urlInput || typeof urlInput !== 'string') {
+        return { valid: false, parsed: null };
+    }
+    try {
+        const parsed = new URL(urlInput.trim());
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return { valid: false, parsed };
+        }
+        return { valid: true, parsed };
+    } catch {
+        return { valid: false, parsed: null };
+    }
+}
+
 export default {
     data: new SlashCommandBuilder()
         .setName("shorten")
@@ -40,12 +55,11 @@ export default {
         const url = interaction.options.getString("url");
         const custom = interaction.options.getString("custom");
 
-        try {
-            new URL(url);
-        } catch (e) {
+        const { valid: isValidUrl } = validateShortenUrl(url);
+        if (!isValidUrl) {
             return replyUserError(interaction, {
                 type: ErrorTypes.VALIDATION,
-                message: 'Invalid URL format. Include http:// or https://',
+                message: 'Invalid URL format. Only http:// and https:// URLs are allowed.',
             });
         }
 

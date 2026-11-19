@@ -68,7 +68,7 @@ export async function loadCommands(client) {
             const commandDir = path.dirname(filePath);
             const category = path.basename(commandDir);
             
-            const commandModule = await import(`file://${filePath}`);
+            const commandModule = await import(pathToFileURL(filePath).href);
             const command = commandModule.default || commandModule;
             
             if (!command.data || !command.execute) {
@@ -120,6 +120,28 @@ export async function loadCommands(client) {
     return client.commands;
 }
 
+const MAX_DESCRIPTION_LENGTH = 100;
+
+export function sanitizeCommandPayloadDescriptions(cmd) {
+    if (!cmd || typeof cmd !== 'object') return cmd;
+    if (typeof cmd.description === 'string' && cmd.description.length > MAX_DESCRIPTION_LENGTH) {
+        cmd.description = `${cmd.description.slice(0, MAX_DESCRIPTION_LENGTH - 3)}...`;
+    }
+    if (Array.isArray(cmd.options)) {
+        for (const opt of cmd.options) {
+            sanitizeCommandPayloadDescriptions(opt);
+            if (Array.isArray(opt.choices)) {
+                for (const choice of opt.choices) {
+                    if (typeof choice.name === 'string' && choice.name.length > MAX_DESCRIPTION_LENGTH) {
+                        choice.name = `${choice.name.slice(0, MAX_DESCRIPTION_LENGTH - 3)}...`;
+                    }
+                }
+            }
+        }
+    }
+    return cmd;
+}
+
 function collectCommandPayloads(client) {
     const commands = [];
     let totalSubcommands = 0;
@@ -140,7 +162,7 @@ function collectCommandPayloads(client) {
         }
 
         registeredNames.add(commandName);
-        const commandJson = command.data.toJSON();
+        const commandJson = sanitizeCommandPayloadDescriptions(command.data.toJSON());
         commands.push(commandJson);
         totalSubcommands += getSubcommandInfo(commandJson).length;
 
@@ -152,15 +174,16 @@ function collectCommandPayloads(client) {
     return { commands, totalSubcommands };
 }
 
-function validateCommands(commands) {
+export function validateCommands(commands) {
     const validationErrors = [];
 
     for (const cmd of commands) {
+        sanitizeCommandPayloadDescriptions(cmd);
         if (cmd.name && cmd.name.length > 32) {
             validationErrors.push(`Command ${cmd.name} has name longer than 32 chars: "${cmd.name}" (${cmd.name.length} chars)`);
         }
-        if (cmd.description && cmd.description.length > 110) {
-            validationErrors.push(`Command ${cmd.name} has description longer than 110 chars: "${cmd.description}" (${cmd.description.length} chars)`);
+        if (cmd.description && cmd.description.length > MAX_DESCRIPTION_LENGTH) {
+            validationErrors.push(`Command ${cmd.name} has description longer than ${MAX_DESCRIPTION_LENGTH} chars: "${cmd.description}" (${cmd.description.length} chars)`);
         }
 
         if (!cmd.options) {
@@ -171,14 +194,14 @@ function validateCommands(commands) {
             if (option.name && option.name.length > 32) {
                 validationErrors.push(`Command ${cmd.name} option ${option.name} has name longer than 32 chars: "${option.name}" (${option.name.length} chars)`);
             }
-            if (option.description && option.description.length > 110) {
-                validationErrors.push(`Command ${cmd.name} option ${option.name} has description longer than 110 chars: "${option.description}" (${option.description.length} chars)`);
+            if (option.description && option.description.length > MAX_DESCRIPTION_LENGTH) {
+                validationErrors.push(`Command ${cmd.name} option ${option.name} has description longer than ${MAX_DESCRIPTION_LENGTH} chars: "${option.description}" (${option.description.length} chars)`);
             }
 
             if (option.choices) {
                 for (const choice of option.choices) {
-                    if (choice.name && choice.name.length > 110) {
-                        validationErrors.push(`Command ${cmd.name} option ${option.name} choice ${choice.name} has name longer than 110 chars: "${choice.name}" (${choice.name.length} chars)`);
+                    if (choice.name && choice.name.length > MAX_DESCRIPTION_LENGTH) {
+                        validationErrors.push(`Command ${cmd.name} option ${option.name} choice ${choice.name} has name longer than ${MAX_DESCRIPTION_LENGTH} chars: "${choice.name}" (${choice.name.length} chars)`);
                     }
                     if (choice.value && choice.value.length > 100) {
                         validationErrors.push(`Command ${cmd.name} option ${option.name} choice ${choice.name} has value longer than 100 chars: "${choice.value}" (${choice.value.length} chars)`);
@@ -194,8 +217,8 @@ function validateCommands(commands) {
                 if (subOption.name && subOption.name.length > 32) {
                     validationErrors.push(`Command ${cmd.name} subcommand ${option.name} option ${subOption.name} has name longer than 32 chars: "${subOption.name}" (${subOption.name.length} chars)`);
                 }
-                if (subOption.description && subOption.description.length > 110) {
-                    validationErrors.push(`Command ${cmd.name} subcommand ${option.name} option ${subOption.name} has description longer than 110 chars: "${subOption.description}" (${subOption.description.length} chars)`);
+                if (subOption.description && subOption.description.length > MAX_DESCRIPTION_LENGTH) {
+                    validationErrors.push(`Command ${cmd.name} subcommand ${option.name} option ${subOption.name} has description longer than ${MAX_DESCRIPTION_LENGTH} chars: "${subOption.description}" (${subOption.description.length} chars)`);
                 }
 
                 if (!subOption.choices) {
@@ -203,8 +226,8 @@ function validateCommands(commands) {
                 }
 
                 for (const choice of subOption.choices) {
-                    if (choice.name && choice.name.length > 110) {
-                        validationErrors.push(`Command ${cmd.name} subcommand ${option.name} option ${subOption.name} choice ${choice.name} has name longer than 110 chars: "${choice.name}" (${choice.name.length} chars)`);
+                    if (choice.name && choice.name.length > MAX_DESCRIPTION_LENGTH) {
+                        validationErrors.push(`Command ${cmd.name} subcommand ${option.name} option ${subOption.name} choice ${choice.name} has name longer than ${MAX_DESCRIPTION_LENGTH} chars: "${choice.name}" (${choice.name.length} chars)`);
                     }
                     if (choice.value && choice.value.length > 100) {
                         validationErrors.push(`Command ${cmd.name} subcommand ${option.name} option ${subOption.name} choice ${choice.name} has value longer than 100 chars: "${choice.value}" (${choice.value.length} chars)`);

@@ -13,6 +13,72 @@ import {
     getEconomyPrefix,
     getUserLevelPrefix,
 } from '../utils/database.js';
+const STRUCTURED_USER_SCOPED_TABLES = [
+  { table: 'economy', userCol: 'user_id' },
+  { table: 'user_levels', userCol: 'user_id' },
+  { table: 'birthdays', userCol: 'user_id' },
+  { table: 'user_birthdays', userCol: 'user_id' },
+  { table: 'afk_status', userCol: 'user_id' },
+  { table: 'guild_users', userCol: 'user_id' },
+  { table: 'upland_faq_entries', userCol: 'author_id' },
+  { table: 'upland_faq_contributors', userCol: 'user_id' },
+];
+
+const STRUCTURED_GUILD_SCOPED_TABLES = [
+  'upland_faq_entries',
+  'upland_faq_contributors',
+  'user_levels',
+  'economy',
+  'birthdays',
+  'user_birthdays',
+  'birthday_configs',
+  'join_to_create_configs',
+  'custom_Variables',
+  'afk_status',
+  'guild_users',
+  'welcome_configs',
+  'leveling_configs',
+];
+
+export async function wipeStructuredPostgresTables(client, guildId, userId = null, options = { guildWide: false }) {
+  const pool = client?.db?.postgres?.pool || client?.db?.db?.pool || client?.db?.pool || null;
+  const queryFn = typeof client?.db?.query === 'function'
+    ? (text, params) => client.db.query(text, params)
+    : (pool && typeof pool.query === 'function' ? (text, params) => pool.query(text, params) : null);
+
+  if (!queryFn || !guildId) {
+    return 0;
+  }
+
+  let deletedRows = 0;
+
+  if (options?.guildWide || !userId) {
+    for (const table of STRUCTURED_GUILD_SCOPED_TABLES) {
+      try {
+        const res = await queryFn(`DELETE FROM ${table} WHERE guild_id = $1`, [guildId]);
+        deletedRows += Number(res?.rowCount || 0);
+      } catch (err) {
+        logger.debug(`Structured guild table wipe skipped for ${table}: ${err.message}`);
+      }
+    }
+    return deletedRows;
+  }
+
+  for (const { table, userCol } of STRUCTURED_USER_SCOPED_TABLES) {
+    try {
+      const res = await queryFn(
+        `DELETE FROM ${table} WHERE guild_id = $1 AND ${userCol} = $2`,
+        [guildId, userId]
+      );
+      deletedRows += Number(res?.rowCount || 0);
+    } catch (err) {
+      logger.debug(`Structured user table wipe skipped for ${table}: ${err.message}`);
+    }
+  }
+
+  return deletedRows;
+}
+
 const wipedataConfirmHandler = {
   name: 'wipedata_yes',
   async execute(interaction, client) {
@@ -112,6 +178,9 @@ const wipedataConfirmHandler = {
       } catch (error) {
         logger.warn('Could not perform prefix search on database:', error);
       }
+
+      const structuredDeletedCount = await wipeStructuredPostgresTables(client, guildId, userId);
+      deletedCount += structuredDeletedCount;
 
       const successMessage =
         `✅ **Your data has been successfully wiped!**\n\n` +
