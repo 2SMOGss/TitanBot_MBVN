@@ -34,7 +34,11 @@ const STOP_WORDS = new Set([
     'what', 'how', 'when', 'where', 'who', 'why', 'which', 'is', 'are', 'was', 'were',
     'the', 'for', 'in', 'to', 'do', 'does', 'did', 'can', 'could', 'should', 'would',
     'and', 'or', 'but', 'with', 'from', 'about', 'into', 'onto', 'upland', 'tell', 'me',
-    'anyone', 'know', 'someone', 'please', 'help', 'guys', 'hey',
+    'anyone', 'know', 'someone', 'please', 'help', 'guys', 'hey', 'explain', 'thanks',
+    'thank', 'mean', 'means', 'work', 'works', 'working', 'get', 'got', 'getting',
+    'use', 'using', 'used', 'make', 'making', 'have', 'has', 'had', 'there', 'this',
+    'that', 'these', 'those', 'any', 'some', 'much', 'many', 'just', 'like', 'need',
+    'want', 'question', 'ask', 'asking',
 ]);
 
 const UPLAND_DOMAIN_KEYWORDS = new Set([
@@ -81,6 +85,7 @@ const SYSTEM_PROMPT = [
 ].join('\n');
 
 let cachedChunks = null;
+let cachedBm25Index = null;
 
 // Map<channelId, Array<{ id, guildId, channelId, question, questionMessageId, askerId, askerTag, messageId, botReplyId, askedAt, createdAt }>>
 export const pendingChannelQuestions = new Map();
@@ -280,8 +285,53 @@ export function registerPendingQuestion({
     logger.info(`[FAQ Self-Heal] Registered pending unanswered question in channel ${channelId}: "${question}"`);
 }
 
+function buildBm25Index(chunks) {
+    const N = Array.isArray(chunks) ? chunks.length : 0;
+    const docs = [];
+    const df = new Map();
+    let totalLen = 0;
+
+    for (let idx = 0; idx < N; idx++) {
+        const chunk = chunks[idx];
+        const tokens = tokenize(`${chunk.title || ''} ${chunk.text || ''}`);
+        const dl = tokens.length;
+        totalLen += dl;
+
+        const tf = new Map();
+        for (const t of tokens) {
+            tf.set(t, (tf.get(t) || 0) + 1);
+        }
+        for (const term of tf.keys()) {
+            df.set(term, (df.get(term) || 0) + 1);
+        }
+
+        docs.push({
+            chunk,
+            tokens,
+            tf,
+            dl,
+        });
+    }
+
+    const avgDocLen = totalLen / Math.max(N, 1);
+    return {
+        N,
+        docs,
+        df,
+        avgDocLen,
+    };
+}
+
+export function getPrecomputedBm25Index() {
+    loadOfficialChunks();
+    return cachedBm25Index;
+}
+
 export function loadOfficialChunks() {
     if (cachedChunks && cachedChunks.length > 0) {
+        if (!cachedBm25Index || cachedBm25Index.N !== cachedChunks.length) {
+            cachedBm25Index = buildBm25Index(cachedChunks);
+        }
         return cachedChunks;
     }
 
@@ -291,6 +341,7 @@ export function loadOfficialChunks() {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
                 cachedChunks = parsed;
+                cachedBm25Index = buildBm25Index(cachedChunks);
                 return cachedChunks;
             }
         }
@@ -362,6 +413,11 @@ export function chunkMarkdownText(text, title, url, chunkSizeWords = CHUNK_SIZE_
     return chunks;
 }
 
+export function parseMarkdownSourceUrl(content, defaultUrl = 'https://www.upland.me/learn/') {
+    const sourceMatch = String(content || '').match(/^\*{0,2}Source:\*{0,2}\s*(https?:\/\/\S+)/im);
+    return sourceMatch ? sourceMatch[1].trim() : defaultUrl;
+}
+
 export function rebuildOfficialVectorIndexSync() {
     const docs = [];
 
@@ -372,9 +428,8 @@ export function rebuildOfficialVectorIndexSync() {
             const fullPath = path.join(dirPath, file);
             const content = fs.readFileSync(fullPath, 'utf8');
             const titleMatch = content.match(/^#\s+(.+)$/m);
-            const sourceMatch = content.match(/^Source:\s*(https?:\/\/\S+)/m);
             const title = titleMatch ? titleMatch[1].trim() : file.replace(/\.md$/, '');
-            const url = sourceMatch ? sourceMatch[1].trim() : defaultUrl;
+            const url = parseMarkdownSourceUrl(content, defaultUrl);
             docs.push({ title, url, content });
         }
     };
@@ -397,39 +452,25 @@ export function rebuildOfficialVectorIndexSync() {
     }
 
     cachedChunks = allChunks;
+    cachedBm25Index = buildBm25Index(allChunks);
     return allChunks;
 }
 
 export function retrieveOfficialChunks(question, topK = TOP_K_CHUNKS) {
     const chunks = loadOfficialChunks();
-    if (!chunks.length) return [];
+    if (!chunks.length || !cachedBm25Index) return [];
 
     const qTokens = tokenize(question).filter((w) => !STOP_WORDS.has(w));
     const searchTokens = qTokens.length > 0 ? qTokens : tokenize(question);
     if (!searchTokens.length) return [];
 
-    const N = chunks.length;
-    const docTokensList = chunks.map((c) => tokenize(`${c.title || ''} ${c.text || ''}`));
-    const avgdl = docTokensList.reduce((acc, t) => acc + t.length, 0) / Math.max(N, 1);
-
-    const df = new Map();
-    for (const tokens of docTokensList) {
-        for (const term of new Set(tokens)) {
-            df.set(term, (df.get(term) || 0) + 1);
-        }
-    }
-
+    const { N, docs, df, avgDocLen } = cachedBm25Index;
     const k1 = 1.5;
     const b = 0.75;
     const scored = [];
 
     for (let idx = 0; idx < N; idx++) {
-        const tokens = docTokensList[idx];
-        const dl = tokens.length;
-        const tf = new Map();
-        for (const t of tokens) {
-            tf.set(t, (tf.get(t) || 0) + 1);
-        }
+        const { chunk, tf, dl } = docs[idx];
 
         let score = 0;
         let matchedTerms = 0;
@@ -439,13 +480,13 @@ export function retrieveOfficialChunks(question, topK = TOP_K_CHUNKS) {
             matchedTerms += 1;
             const nQ = df.get(term) || 0;
             const idf = Math.log((N - nQ + 0.5) / (nQ + 0.5) + 1.0);
-            const denom = freq + k1 * (1 - b + b * (dl / Math.max(avgdl, 1.0)));
+            const denom = freq + k1 * (1 - b + b * (dl / Math.max(avgDocLen, 1.0)));
             score += idf * ((freq * (k1 + 1)) / denom);
         }
 
         const coverage = matchedTerms / searchTokens.length;
         scored.push({
-            ...chunks[idx],
+            ...chunk,
             score: Number(score.toFixed(4)),
             matchedTerms,
             coverage: Number(coverage.toFixed(3)),
@@ -461,6 +502,20 @@ async function ensureGuildRow(pool, guildId) {
         `INSERT INTO guilds (id, config) VALUES ($1, '{}') ON CONFLICT (id) DO NOTHING`,
         [String(guildId)]
     );
+}
+
+function normalizeInMemoryFaqEntry(entry, guildId) {
+    if (!entry || typeof entry !== 'object') return null;
+    const status = entry.status || (entry.verified ? 'approved' : 'approved');
+    const verified = entry.verified !== undefined ? Boolean(entry.verified) : status === 'approved';
+    return {
+        ...entry,
+        guild_id: String(entry.guild_id || guildId || ''),
+        verified,
+        status,
+        reviewed_by: entry.reviewed_by ?? null,
+        reviewed_at: entry.reviewed_at ?? null,
+    };
 }
 
 export async function addCommunityAnswer(client, {
@@ -549,7 +604,8 @@ export async function addCommunityAnswer(client, {
     }
 
     const key = `guild:${guildId}:upland_faq_entries`;
-    const entries = (await client?.db?.get?.(key, [])) || [];
+    const rawEntries = (await client?.db?.get?.(key, [])) || [];
+    const entries = rawEntries.map((e) => normalizeInMemoryFaqEntry(e, guildId)).filter(Boolean);
     const normCleanQuestion = cleanQuestion.toLowerCase();
     const existingIdx = entries.findIndex(
         (e) => String(e.question || '').trim().toLowerCase() === normCleanQuestion
@@ -641,10 +697,13 @@ export async function searchCommunityAnswers(client, guildId, question, topKOrOp
         }
     } else if (client?.db?.get) {
         const allRows = (await client.db.get(`guild:${guildId}:upland_faq_entries`, [])) || [];
-        rows = allRows.filter((r) => {
-            const st = r.status || 'approved';
-            return includeUnapproved ? st !== 'disapproved' : st === 'approved';
-        });
+        rows = allRows
+            .map((r) => normalizeInMemoryFaqEntry(r, guildId))
+            .filter((r) => {
+                if (!r) return false;
+                const st = r.status || 'approved';
+                return includeUnapproved ? st !== 'disapproved' : st === 'approved';
+            });
     }
 
     if (!rows.length) return [];
@@ -707,7 +766,7 @@ export async function listCommunityAnswers(client, guildId, limit = 10) {
     }
 
     const rows = (await client?.db?.get?.(`guild:${guildId}:upland_faq_entries`, [])) || [];
-    return rows.slice(0, limit);
+    return rows.map((r) => normalizeInMemoryFaqEntry(r, guildId)).filter(Boolean).slice(0, limit);
 }
 
 export async function getCommunityAnswerById(client, guildId, entryId) {
@@ -721,7 +780,8 @@ export async function getCommunityAnswerById(client, guildId, entryId) {
     }
 
     const rows = (await client?.db?.get?.(`guild:${guildId}:upland_faq_entries`, [])) || [];
-    return rows.find((r) => Number(r.id) === Number(entryId)) || null;
+    const found = rows.find((r) => Number(r.id) === Number(entryId));
+    return found ? normalizeInMemoryFaqEntry(found, guildId) : null;
 }
 
 export async function reviewCommunityAnswer(client, guildId, entryId, status, reviewerId) {
@@ -745,7 +805,7 @@ export async function reviewCommunityAnswer(client, guildId, entryId, status, re
     }
 
     const key = `guild:${guildId}:upland_faq_entries`;
-    const rows = (await client?.db?.get?.(key, [])) || [];
+    const rows = ((await client?.db?.get?.(key, [])) || []).map((r) => normalizeInMemoryFaqEntry(r, guildId)).filter(Boolean);
     const idx = rows.findIndex((r) => Number(r.id) === Number(entryId));
     if (idx === -1) return null;
     rows[idx] = {
@@ -814,67 +874,136 @@ export function memberHasVeteranAccess(member, guildConfig) {
     return Boolean(member.roles?.cache?.some((r) => r.name.toLowerCase() === 'veteran'));
 }
 
-export async function incrementContributorAndMaybeAwardVeteran(client, guild, member, guildConfig) {
-    if (!guild || !member) return { answersCount: 0, newlyAwarded: false, veteranRole: null };
-    const guildId = guild.id;
-    const userId = member.id;
+export async function getContributorApprovedCount(client, guildId, userId) {
+    if (!guildId || !userId) return 0;
     const pool = getPgPool(client);
-    let answersCount = 0;
+    if (pool) {
+        const res = await pool.query(
+            `SELECT COUNT(*)::int AS approved_count
+             FROM upland_faq_entries
+             WHERE guild_id = $1 AND author_id = $2 AND COALESCE(status, 'approved') = 'approved'`,
+            [String(guildId), String(userId)]
+        );
+        return Number(res.rows[0]?.approved_count || 0);
+    }
+
+    const key = `guild:${guildId}:upland_faq_entries`;
+    const rows = (await client?.db?.get?.(key, [])) || [];
+    return rows.filter(
+        (r) => String(r.author_id || '') === String(userId) && (r.status || 'approved') === 'approved'
+    ).length;
+}
+
+export const getContributorAnswerCount = getContributorApprovedCount;
+
+export async function syncContributorVeteranStatus(client, guild, userId, guildConfig = null) {
+    if (!guildIdOrGuild(guild) || !userId) {
+        return { answersCount: 0, newlyAwarded: false, veteranRole: null };
+    }
+    const guildId = typeof guild === 'string' ? guild : guild.id;
+    const guildObj = typeof guild === 'object' && guild !== null ? guild : null;
+    const resolvedConfig = guildConfig || (guildObj ? await getGuildConfig(client, guildId) : null);
+    const pool = getPgPool(client);
+
+    const answersCount = await getContributorApprovedCount(client, guildId, userId);
     let alreadyAwarded = false;
 
     if (pool) {
         await ensureGuildRow(pool, guildId);
         const res = await pool.query(
             `INSERT INTO upland_faq_contributors (guild_id, user_id, answers_count)
-             VALUES ($1, $2, 1)
+             VALUES ($1, $2, $3)
              ON CONFLICT (guild_id, user_id)
-             DO UPDATE SET answers_count = upland_faq_contributors.answers_count + 1,
+             DO UPDATE SET answers_count = $3,
                            updated_at = CURRENT_TIMESTAMP
              RETURNING answers_count, veteran_awarded_at`,
-            [String(guildId), String(userId)]
+            [String(guildId), String(userId), answersCount]
         );
-        answersCount = Number(res.rows[0]?.answers_count || 1);
         alreadyAwarded = Boolean(res.rows[0]?.veteran_awarded_at);
     } else if (client?.db) {
         const key = `guild:${guildId}:upland_faq_contributors`;
         const map = (await client.db.get(key, {})) || {};
         const prev = map[userId] || { answers_count: 0, veteran_awarded_at: null };
-        answersCount = Number(prev.answers_count || 0) + 1;
         alreadyAwarded = Boolean(prev.veteran_awarded_at);
         map[userId] = { answers_count: answersCount, veteran_awarded_at: prev.veteran_awarded_at };
         await client.db.set(key, map);
     }
 
-    if (answersCount < VETERAN_ANSWER_THRESHOLD) {
+    if (!guildObj) {
         return { answersCount, newlyAwarded: false, veteranRole: null };
     }
 
-    const veteranRole = await resolveOrCreateVeteranRole(client, guild, guildConfig);
-    if (!veteranRole) {
+    const member = guildObj.members?.cache?.get(userId) ||
+        await guildObj.members?.fetch?.(userId).catch(() => null);
+
+    if (answersCount < VETERAN_ANSWER_THRESHOLD) {
+        if (member) {
+            const isStaff = memberHasModerationCommandAccess(
+                member,
+                resolvedConfig,
+                PermissionFlagsBits.ManageMessages
+            );
+            if (!isStaff) {
+                const configuredId = resolvedConfig?.veteranRole;
+                const veteranRole = (configuredId && guildObj.roles?.cache?.get(configuredId)) ||
+                    guildObj.roles?.cache?.find((r) => r.name.toLowerCase() === 'veteran');
+                if (veteranRole && member.roles?.cache?.has(veteranRole.id)) {
+                    const botTopPos = guildObj.members?.me?.roles?.highest?.position ?? 0;
+                    if (veteranRole.position < botTopPos) {
+                        await member.roles.remove(
+                            veteranRole,
+                            `Approved FAQ count dropped below ${VETERAN_ANSWER_THRESHOLD} (currently ${answersCount})`
+                        ).catch(() => {});
+                    }
+                }
+            }
+        }
         return { answersCount, newlyAwarded: false, veteranRole: null };
+    }
+
+    const veteranRole = await resolveOrCreateVeteranRole(client, guildObj, resolvedConfig);
+    if (!veteranRole || !member) {
+        return { answersCount, newlyAwarded: false, veteranRole };
     }
 
     const hasRole = member.roles?.cache?.has(veteranRole.id);
     let newlyAwarded = false;
 
     if (!hasRole) {
-        const botTopPos = guild.members.me?.roles?.highest?.position ?? 0;
+        const botTopPos = guildObj.members?.me?.roles?.highest?.position ?? 0;
         if (veteranRole.position < botTopPos) {
-            await member.roles.add(veteranRole, `Answered ${answersCount} community FAQ questions`).catch((err) => {
+            await member.roles.add(veteranRole, `Answered ${answersCount} approved community FAQ questions`).catch((err) => {
                 logger.warn(`Failed to assign Veteran role to ${member.id} in ${guildId}:`, err.message);
             });
             newlyAwarded = !alreadyAwarded;
         }
     }
 
-    if (!alreadyAwarded && pool) {
-        await pool.query(
-            `UPDATE upland_faq_contributors SET veteran_awarded_at = CURRENT_TIMESTAMP WHERE guild_id = $1 AND user_id = $2`,
-            [String(guildId), String(userId)]
-        ).catch(() => {});
+    if (!alreadyAwarded) {
+        if (pool) {
+            await pool.query(
+                `UPDATE upland_faq_contributors SET veteran_awarded_at = CURRENT_TIMESTAMP WHERE guild_id = $1 AND user_id = $2`,
+                [String(guildId), String(userId)]
+            ).catch(() => {});
+        } else if (client?.db) {
+            const key = `guild:${guildId}:upland_faq_contributors`;
+            const map = (await client.db.get(key, {})) || {};
+            map[userId] = { answers_count: answersCount, veteran_awarded_at: new Date().toISOString() };
+            await client.db.set(key, map);
+        }
     }
 
     return { answersCount, newlyAwarded, veteranRole };
+}
+
+function guildIdOrGuild(guild) {
+    if (!guild) return null;
+    return typeof guild === 'string' ? guild : guild.id;
+}
+
+export async function incrementContributorAndMaybeAwardVeteran(client, guild, member, guildConfig) {
+    if (!guild || !member) return { answersCount: 0, newlyAwarded: false, veteranRole: null };
+    return syncContributorVeteranStatus(client, guild, member.id, guildConfig);
 }
 
 export function buildFaqReviewRow(guildId, entryId) {
@@ -923,7 +1052,7 @@ export async function deleteCommunityAnswer(client, guildId, entryId) {
     if (idx === -1) return null;
     const [removed] = rows.splice(idx, 1);
     await client?.db?.set?.(key, rows);
-    return removed;
+    return removed ? normalizeInMemoryFaqEntry(removed, guildId) : null;
 }
 
 export function extractGroundedAnswer(question, officialChunks, communityMatches = []) {
@@ -990,7 +1119,7 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
     return parts.join('\n\n---\n\n');
 }
 
-async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputTokens = 700) {
+export async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputTokens = 700) {
     const apiKey = (process.env.GEMINI_API_KEY || '').trim();
     if (!apiKey || apiKey === 'your_gemini_api_key_here') {
         return null;
@@ -1032,6 +1161,11 @@ async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputTokens =
             });
 
             if (!response.ok) {
+                const errText = await response.text().catch(() => '');
+                const summary = String(errText || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+                logger.warn(
+                    `Gemini API returned non-2xx HTTP ${response.status} (${response.statusText || 'Error'})${summary ? `: ${summary}` : ''}`
+                );
                 continue;
             }
 
@@ -1052,10 +1186,55 @@ async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputTokens =
     return null;
 }
 
-export async function answerUplandQuestion(client, guildId, question, topK = TOP_K_CHUNKS) {
+export function parseUnansweredResponse(geminiText) {
+    const raw = String(geminiText || '').trim();
+    const tokenRegex = /\[UNANSWERED\]/i;
+    const match = tokenRegex.exec(raw);
+
+    if (match) {
+        const before = raw.slice(0, match.index).trim();
+        const after = raw.slice(match.index + match[0].length).trim();
+        const beforeWords = tokenize(before);
+        // If [UNANSWERED] is at the start or no substantive answer precedes it, treat as unanswered
+        if (beforeWords.length < 15) {
+            const cleanUnanswered = after || before ||
+                'I don\'t have that in my Upland FAQ database yet — if a veteran player answers this in chat, I will automatically learn it for next time!';
+            return { isUnanswered: true, cleanedText: cleanUnanswered };
+        }
+        return { isUnanswered: false, cleanedText: before };
+    }
+
+    if (/not in the (official )?documentation/i.test(raw)) {
+        return {
+            isUnanswered: true,
+            cleanedText: raw,
+        };
+    }
+
+    return { isUnanswered: false, cleanedText: raw };
+}
+
+export async function answerUplandQuestion(client, guildId, question, topKOrOptions = TOP_K_CHUNKS, maybeOptions = {}) {
+    let topK = TOP_K_CHUNKS;
+    let prefetchedCommunityMatches = null;
+
+    if (typeof topKOrOptions === 'object' && topKOrOptions !== null) {
+        topK = Number(topKOrOptions.topK) || TOP_K_CHUNKS;
+        if (Array.isArray(topKOrOptions.communityMatches)) {
+            prefetchedCommunityMatches = topKOrOptions.communityMatches;
+        }
+    } else {
+        topK = Number(topKOrOptions) || TOP_K_CHUNKS;
+        if (typeof maybeOptions === 'object' && maybeOptions !== null && Array.isArray(maybeOptions.communityMatches)) {
+            prefetchedCommunityMatches = maybeOptions.communityMatches;
+        }
+    }
+
     const sanitizedQuestion = sanitizePromptInput(question, 500);
     const [communityMatches, officialChunks] = await Promise.all([
-        searchCommunityAnswers(client, guildId, sanitizedQuestion, 3),
+        prefetchedCommunityMatches !== null
+            ? Promise.resolve(prefetchedCommunityMatches)
+            : searchCommunityAnswers(client, guildId, sanitizedQuestion, 3),
         Promise.resolve(retrieveOfficialChunks(sanitizedQuestion, topK)),
     ]);
 
@@ -1118,12 +1297,11 @@ export async function answerUplandQuestion(client, guildId, question, topK = TOP
 
     let geminiText = await callGeminiPrompt(SYSTEM_PROMPT, userPrompt, 700);
     if (geminiText) {
-        if (geminiText.startsWith('[UNANSWERED]') || /not in the (official )?documentation/i.test(geminiText)) {
-            const cleanUnanswered = geminiText.replace(/^\[UNANSWERED\]\s*/i, '').trim() ||
-                'I don\'t have that in my Upland FAQ database yet — if a veteran player answers this in chat, I will automatically learn it for next time!';
+        const parsed = parseUnansweredResponse(geminiText);
+        if (parsed.isUnanswered) {
             return {
                 answered: false,
-                answer: cleanUnanswered,
+                answer: parsed.cleanedText,
                 sources: [],
                 communityMatches: [],
                 officialChunks: [],
@@ -1132,7 +1310,7 @@ export async function answerUplandQuestion(client, guildId, question, topK = TOP
 
         return {
             answered: true,
-            answer: geminiText,
+            answer: parsed.cleanedText,
             sources: uniqueSources.slice(0, 3),
             communityMatches,
             officialChunks: strongOfficial,
@@ -1414,11 +1592,7 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
             processedAnswerMessageIds.set(message.id, now);
             const distilledAnswer = await verifyAndDistillCommunityAnswer(matchedPending.question, content);
             if (distilledAnswer) {
-                const isVerifiedStaff = memberHasModerationCommandAccess(
-                    message.member,
-                    guildConfig,
-                    PermissionFlagsBits.ManageMessages
-                );
+                const isStaffOrVeteran = memberHasVeteranAccess(message.member, guildConfig);
 
                 const addResult = await addCommunityAnswer(client, {
                     guildId,
@@ -1426,8 +1600,8 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
                     answer: distilledAnswer,
                     authorId: message.author.id,
                     authorTag: message.author.tag,
-                    verified: isVerifiedStaff,
-                    isStaffOrVeteran: isVerifiedStaff,
+                    verified: isStaffOrVeteran,
+                    isStaffOrVeteran,
                 });
 
                 // Remove resolved question from pending list
@@ -1446,18 +1620,15 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
 
                 const { entry, updated } = addResult;
 
-                let contributorInfo = { answersCount: 0, newlyAwarded: false, veteranRole: null };
-                if (entry.status === 'approved') {
-                    contributorInfo = await incrementContributorAndMaybeAwardVeteran(
-                        client,
-                        message.guild,
-                        message.member,
-                        guildConfig
-                    );
-                }
+                const contributorInfo = await syncContributorVeteranStatus(
+                    client,
+                    message.guild,
+                    message.author.id,
+                    guildConfig
+                );
 
                 logger.info(
-                    `[FAQ Self-Heal] Learned FAQ #${entry.id} in guild ${guildId} from ${message.author.tag} (status=${entry.status}, count=${contributorInfo.answersCount}): Q="${entry.question}"`
+                    `[FAQ Self-Heal] Learned FAQ #${entry.id} in guild ${guildId} from ${message.author.tag} (status=${entry.status}, approvedCount=${contributorInfo.answersCount}): Q="${entry.question}"`
                 );
 
                 if (contributorInfo.newlyAwarded && contributorInfo.veteranRole) {
@@ -1465,7 +1636,7 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
                         embeds: [
                             createEmbed({
                                 title: '🏅 Veteran Role Unlocked!',
-                                description: `Congrats <@${message.author.id}>! You've answered **${VETERAN_ANSWER_THRESHOLD}** community questions and earned the ${contributorInfo.veteranRole} role!`,
+                                description: `Congrats <@${message.author.id}>! You've reached **${VETERAN_ANSWER_THRESHOLD}** approved community answers and earned the ${contributorInfo.veteranRole} role!`,
                                 color: 'success',
                             }),
                         ],
@@ -1495,7 +1666,7 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
         }
 
         // Check if it matches our Community FAQ Database OR has Upland domain keywords
-        const communityMatches = await searchCommunityAnswers(client, guildId, content, 2);
+        const communityMatches = await searchCommunityAnswers(client, guildId, content, 3);
         const isUplandTopic = communityMatches.length > 0 || hasUplandDomainSignal(content);
 
         if (!isUplandTopic) {
@@ -1518,7 +1689,11 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
             return false;
         }
 
-        const result = await answerUplandQuestion(client, guildId, content);
+        // Pass pre-fetched communityMatches so answerUplandQuestion does not re-query PostgreSQL
+        const result = await answerUplandQuestion(client, guildId, content, {
+            topK: TOP_K_CHUNKS,
+            communityMatches,
+        });
 
         if (result.answered) {
             passiveUserCooldowns.set(message.author.id, now);
@@ -1546,4 +1721,5 @@ export async function handlePassiveFaqMessage(message, client, buildAskResponseE
         return false;
     }
 }
+
 

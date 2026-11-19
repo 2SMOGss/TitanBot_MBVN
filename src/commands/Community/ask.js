@@ -8,6 +8,7 @@ import {
 import { createEmbed, successEmbed, infoEmbed } from '../../utils/embeds.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { memberHasModerationCommandAccess } from '../../utils/permissionGuard.js';
+import { getGuildConfig } from '../../services/config/guildConfig.js';
 import {
     answerUplandQuestion,
     addCommunityAnswer,
@@ -16,18 +17,20 @@ import {
     registerPendingQuestion,
     memberHasVeteranAccess,
     postFaqAuditReview,
+    syncContributorVeteranStatus,
 } from '../../services/uplandFaqService.js';
 import { logger } from '../../utils/logger.js';
 
-export function buildFaqActionRow(guildId) {
+export function buildFaqActionRow(guildId = 'global') {
+    const safeGuildId = guildId || 'global';
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`faq_teach:${guildId}`)
+            .setCustomId(`faq_teach:${safeGuildId}`)
             .setLabel('Teach / Submit Answer')
             .setEmoji('💡')
             .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-            .setCustomId(`faq_list:${guildId}`)
+            .setCustomId(`faq_list:${safeGuildId}`)
             .setLabel('Community Answers DB')
             .setEmoji('📚')
             .setStyle(ButtonStyle.Secondary),
@@ -96,6 +99,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('ask')
         .setDescription('Ask any question about Upland (searches Official Docs & Self-Healing Community FAQ DB)')
+        .setDMPermission(false)
         .addStringOption((option) =>
             option
                 .setName('question')
@@ -112,21 +116,31 @@ export default {
         ),
     category: 'Community',
 
-    async prefixExecute(interaction, argsOrConfig) {
+    async prefixExecute(interaction, argsOrConfig, maybeGuildConfig = null) {
         let rawQuestion = '';
+        let guildConfig = maybeGuildConfig;
+
         if (Array.isArray(argsOrConfig)) {
             rawQuestion = argsOrConfig.join(' ').trim();
-        } else if (Array.isArray(interaction?.options?._hoistedOptions)) {
-            rawQuestion = interaction.options._hoistedOptions
-                .map((opt) => opt.value)
-                .join(' ')
-                .trim();
-        } else if (typeof interaction?.options?.getString === 'function') {
-            rawQuestion = (interaction.options.getString('question') || '').trim();
+        } else {
+            if (argsOrConfig && typeof argsOrConfig === 'object' && !guildConfig) {
+                guildConfig = argsOrConfig;
+            }
+            if (Array.isArray(interaction?.options?._hoistedOptions)) {
+                rawQuestion = interaction.options._hoistedOptions
+                    .map((opt) => opt.value)
+                    .join(' ')
+                    .trim();
+            } else if (typeof interaction?.options?.getString === 'function') {
+                rawQuestion = (interaction.options.getString('question') || '').trim();
+            }
         }
 
-        const guildId = interaction.guildId || interaction.guild?.id || 'global';
+        const guildObj = interaction.guild || null;
+        const guildId = interaction.guildId || guildObj?.id || 'global';
         const channelId = interaction.channel?.id || interaction.channelId;
+        const hasGuild = Boolean(guildObj || (interaction.guildId && interaction.guildId !== 'global'));
+        const actionRowComponents = hasGuild ? [buildFaqActionRow(guildId)] : [];
 
         if (!rawQuestion) {
             await interaction.reply({
@@ -136,6 +150,7 @@ export default {
                         'Ask any question about **Upland** right in chat, or use:\n• `/ask question: What is UPX used for?`\n• `!ask How do FSA properties work?`'
                     ),
                 ],
+                ...(actionRowComponents.length ? { components: actionRowComponents } : {}),
             });
             return;
         }
@@ -144,8 +159,50 @@ export default {
             const listEmbed = await buildCommunityFaqListEmbed(interaction.client, guildId);
             await interaction.reply({
                 embeds: [listEmbed],
+                ...(actionRowComponents.length ? { components: actionRowComponents } : {}),
             });
             return;
+        }
+
+        const deleteMatch = rawQuestion.match(/^(?:delete|del)\s+#?(\d+)$/i);
+        if (deleteMatch) {
+            const resolvedConfig = guildConfig || (hasGuild ? await getGuildConfig(interaction.client, guildId) : null);
+            const isStaff = memberHasModerationCommandAccess(
+                interaction.member,
+                resolvedConfig,
+                PermissionFlagsBits.ManageMessages
+            );
+            if (!isStaff) {
+                await interaction.reply({
+                    embeds: [
+                        createEmbed({
+                            title: 'Permission Denied',
+                            description: 'Only Moderators or Admins can delete Community FAQ entries.',
+                            color: 'error',
+                        }),
+                    ],
+                });
+                return;
+            }
+
+            const entryId = Number(deleteMatch[1]);
+            const removed = await deleteCommunityAnswer(interaction.client, guildId, entryId);
+            if (removed?.author_id && guildObj) {
+                await syncContributorVeteranStatus(interaction.client, guildObj, removed.author_id, resolvedConfig);
+            }
+
+            await interaction.reply({
+                embeds: [
+                    removed
+                        ? successEmbed('Deleted Community FAQ Entry', `Removed entry **#${removed.id}** (*${removed.question}*).`)
+                        : infoEmbed('Entry Not Found', `No Community FAQ entry with ID **#${entryId}** was found.`),
+                ],
+            });
+            return;
+        }
+
+        if (typeof interaction.channel?.sendTyping === 'function') {
+            await interaction.channel.sendTyping().catch(() => {});
         }
 
         const result = await answerUplandQuestion(interaction.client, guildId, rawQuestion);
@@ -153,6 +210,7 @@ export default {
 
         const sentMsg = await interaction.reply({
             embeds: [embed],
+            ...(actionRowComponents.length ? { components: actionRowComponents } : {}),
         });
 
         if (!result.answered && channelId) {
@@ -174,6 +232,8 @@ export default {
         if (!deferSuccess) return;
 
         const guildId = interaction.guildId || 'global';
+        const hasGuild = Boolean(interaction.guild || (interaction.guildId && interaction.guildId !== 'global'));
+        const actionRowComponents = hasGuild ? [buildFaqActionRow(guildId)] : [];
         const question = interaction.options.getString('question', true).trim();
         const teachAnswer = interaction.options.getString('teach_answer', false)?.trim();
 
@@ -206,7 +266,9 @@ export default {
             const { entry, updated } = result;
             logger.info(`Community FAQ entry #${entry.id} ${updated ? 'updated' : 'created'} by ${interaction.user.tag} (status=${entry.status})`);
 
-            if (entry.status === 'pending' && interaction.guild) {
+            if (entry.status === 'approved' && interaction.guild) {
+                await syncContributorVeteranStatus(client, interaction.guild, interaction.user.id, guildConfig);
+            } else if (entry.status === 'pending' && interaction.guild) {
                 await postFaqAuditReview({
                     client,
                     guild: interaction.guild,
@@ -226,6 +288,7 @@ export default {
                         `**Question:** ${entry.question}\n\n**Answer:**\n${entry.answer}\n\n*Contributed by <@${interaction.user.id}>${isStaffOrVeteran ? ' (✅ Verified Staff/Veteran)' : ' (⏳ Pending Moderator/Veteran Approval)'}*`
                     ),
                 ],
+                ...(actionRowComponents.length ? { components: actionRowComponents } : {}),
             });
             return;
         }
@@ -234,11 +297,12 @@ export default {
             const listEmbed = await buildCommunityFaqListEmbed(client, guildId);
             await InteractionHelper.safeEditReply(interaction, {
                 embeds: [listEmbed],
+                ...(actionRowComponents.length ? { components: actionRowComponents } : {}),
             });
             return;
         }
 
-        const deleteMatch = question.match(/^delete\s+#?(\d+)$/i);
+        const deleteMatch = question.match(/^(?:delete|del)\s+#?(\d+)$/i);
         if (deleteMatch) {
             const isStaff = memberHasModerationCommandAccess(
                 interaction.member,
@@ -259,6 +323,10 @@ export default {
             }
 
             const removed = await deleteCommunityAnswer(client, guildId, Number(deleteMatch[1]));
+            if (removed?.author_id && interaction.guild) {
+                await syncContributorVeteranStatus(client, interaction.guild, removed.author_id, guildConfig);
+            }
+
             await InteractionHelper.safeEditReply(interaction, {
                 embeds: [
                     removed
@@ -274,6 +342,7 @@ export default {
 
         const sentReply = await InteractionHelper.safeEditReply(interaction, {
             embeds: [embed],
+            ...(actionRowComponents.length ? { components: actionRowComponents } : {}),
         });
 
         if (!result.answered && interaction.channelId) {
@@ -284,8 +353,10 @@ export default {
                 askerId: interaction.user.id,
                 askerTag: interaction.user.tag,
                 messageId: sentReply?.id || interaction.id,
+                questionMessageId: sentReply?.id || interaction.id,
                 botReplyId: sentReply?.id || null,
             });
         }
     },
 };
+

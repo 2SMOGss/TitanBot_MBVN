@@ -37,20 +37,77 @@ export default {
         return;
       }
 
+      const guildConfig = await getGuildConfig(client, message.guild.id);
+
       if (client.user && message.mentions.has(client.user) && !message.mentions.everyone) {
         const mentionPattern = new RegExp(`^<@!?${client.user.id}>\\s*(.*)$`, 's');
         const match = message.content.trim().match(mentionPattern);
         if (match) {
           const askCommand = client.commands.get('ask');
           if (askCommand?.prefixExecute) {
+            if ((process.env.MAINTENANCE_MODE === 'true' || isMaintenanceMode()) && !isBotOwner(message.author.id)) {
+              await message.channel.send({
+                embeds: [createEmbed({
+                  title: 'Maintenance Mode',
+                  description: getBotMessage('maintenanceMode'),
+                  color: 'warning',
+                })],
+              }).catch(() => {});
+              return;
+            }
+
+            if (!isCommandCategoryEnabled(askCommand.category)) {
+              await message.channel.send({
+                embeds: [createEmbed({
+                  title: 'Feature Disabled',
+                  description: getBotMessage('commandDisabled'),
+                  color: 'error',
+                })],
+              }).catch(() => {});
+              return;
+            }
+
+            const disabledInConfig = Array.isArray(guildConfig?.disabledCommands)
+              && guildConfig.disabledCommands.includes('ask');
+            if (disabledInConfig || !(await isCommandEnabled(client, message.guild.id, 'ask', askCommand.category))) {
+              await message.channel.send({
+                embeds: [createEmbed({
+                  title: 'Command Disabled',
+                  description: 'This command has been disabled for this server.',
+                  color: 'error',
+                })],
+              }).catch(() => {});
+              return;
+            }
+
+            const mockInteractionForProtection = {
+              guildId: message.guild.id,
+              user: message.author,
+            };
+            const abuseProtection = await enforceAbuseProtection(
+              mockInteractionForProtection,
+              askCommand,
+              'ask',
+            );
+            if (!abuseProtection.allowed) {
+              const formattedCooldown = formatCooldownDuration(abuseProtection.remainingMs);
+              await message.channel.send({
+                embeds: [createEmbed({
+                  title: 'Command Cooldown',
+                  description: `This command is on cooldown. Please wait ${formattedCooldown} before trying again.`,
+                  color: 'error',
+                })],
+              }).catch(() => {});
+              return;
+            }
+
             const questionArgs = match[1].trim() ? match[1].trim().split(/\s+/) : [];
-            await askCommand.prefixExecute(message, questionArgs);
+            await askCommand.prefixExecute(message, questionArgs, guildConfig);
             return;
           }
         }
       }
 
-      const guildConfig = await getGuildConfig(client, message.guild.id);
       const prefixHandled = await handlePrefixCommand(message, client, guildConfig);
       if (!prefixHandled) {
         await handlePassiveFaqMessage(message, client, buildAskResponseEmbed, guildConfig);

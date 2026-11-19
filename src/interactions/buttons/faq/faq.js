@@ -21,7 +21,13 @@ import {
     buildFaqReviewRow,
     buildModReviewRow,
     postFaqAuditReview,
+    syncContributorVeteranStatus,
+    VETERAN_ANSWER_THRESHOLD,
 } from '../../../services/uplandFaqService.js';
+
+export function isValidFaqEntryId(entryId) {
+    return Number.isInteger(entryId) && entryId > 0;
+}
 
 export async function handleFaqTeachModalSubmit(modalInteraction, client, guildIdArg = null) {
     const guildId = guildIdArg || modalInteraction.guildId || 'global';
@@ -64,7 +70,9 @@ export async function handleFaqTeachModalSubmit(modalInteraction, client, guildI
     const { entry, updated } = result;
     logger.info(`Community FAQ entry #${entry.id} ${updated ? 'updated' : 'saved'} via modal by ${modalInteraction.user.tag} (status=${entry.status})`);
 
-    if (entry.status === 'pending' && modalInteraction.guild) {
+    if (entry.status === 'approved' && modalInteraction.guild) {
+        await syncContributorVeteranStatus(client, modalInteraction.guild, modalInteraction.user.id, guildConfig);
+    } else if (entry.status === 'pending' && modalInteraction.guild) {
         await postFaqAuditReview({
             client,
             guild: modalInteraction.guild,
@@ -196,11 +204,26 @@ function buildUpdatedReviewEmbed(entry, statusLabel, color, footerText) {
     });
 }
 
+function replyInvalidEntryId(interaction) {
+    return interaction.reply({
+        embeds: [createEmbed({
+            title: 'Invalid Entry ID',
+            description: 'The FAQ entry ID must be a positive integer.',
+            color: 'error',
+        })],
+        flags: MessageFlags.Ephemeral,
+    });
+}
+
 const faqReviewApproveButton = {
     name: 'faq_review_approve',
     async execute(interaction, client, args) {
         const guildId = args?.[0] || interaction.guildId;
         const entryId = Number(args?.[1]);
+        if (!Number.isInteger(entryId) || entryId <= 0) {
+            return replyInvalidEntryId(interaction);
+        }
+
         const guildConfig = await getGuildConfig(client, guildId);
 
         if (!memberHasVeteranAccess(interaction.member, guildConfig)) {
@@ -220,6 +243,21 @@ const faqReviewApproveButton = {
                 embeds: [createEmbed({ title: 'Not Found', description: `FAQ entry #${entryId} no longer exists.`, color: 'warning' })],
                 flags: MessageFlags.Ephemeral,
             });
+        }
+
+        if (updated.author_id && interaction.guild) {
+            const vetStatus = await syncContributorVeteranStatus(client, interaction.guild, updated.author_id, guildConfig);
+            if (vetStatus.newlyAwarded && vetStatus.veteranRole) {
+                await interaction.channel?.send?.({
+                    embeds: [
+                        createEmbed({
+                            title: '🏅 New Veteran Unlocked!',
+                            description: `<@${updated.author_id}> just reached **${VETERAN_ANSWER_THRESHOLD}** approved community answers and earned the ${vetStatus.veteranRole} role!`,
+                            color: 'success',
+                        }),
+                    ],
+                }).catch(() => {});
+            }
         }
 
         const embed = buildUpdatedReviewEmbed(
@@ -242,6 +280,10 @@ const faqReviewDisapproveButton = {
     async execute(interaction, client, args) {
         const guildId = args?.[0] || interaction.guildId;
         const entryId = Number(args?.[1]);
+        if (!Number.isInteger(entryId) || entryId <= 0) {
+            return replyInvalidEntryId(interaction);
+        }
+
         const guildConfig = await getGuildConfig(client, guildId);
 
         if (!memberHasVeteranAccess(interaction.member, guildConfig)) {
@@ -261,6 +303,10 @@ const faqReviewDisapproveButton = {
                 embeds: [createEmbed({ title: 'Not Found', description: `FAQ entry #${entryId} no longer exists.`, color: 'warning' })],
                 flags: MessageFlags.Ephemeral,
             });
+        }
+
+        if (updated.author_id && interaction.guild) {
+            await syncContributorVeteranStatus(client, interaction.guild, updated.author_id, guildConfig);
         }
 
         const modPing = guildConfig?.modRole ? `<@&${guildConfig.modRole}> ` : '';
@@ -284,6 +330,10 @@ const faqModApproveButton = {
     async execute(interaction, client, args) {
         const guildId = args?.[0] || interaction.guildId;
         const entryId = Number(args?.[1]);
+        if (!Number.isInteger(entryId) || entryId <= 0) {
+            return replyInvalidEntryId(interaction);
+        }
+
         const guildConfig = await getGuildConfig(client, guildId);
 
         if (!memberHasModerationCommandAccess(interaction.member, guildConfig, PermissionFlagsBits.ManageMessages)) {
@@ -303,6 +353,10 @@ const faqModApproveButton = {
                 embeds: [createEmbed({ title: 'Not Found', description: `FAQ entry #${entryId} no longer exists.`, color: 'warning' })],
                 flags: MessageFlags.Ephemeral,
             });
+        }
+
+        if (updated.author_id && interaction.guild) {
+            await syncContributorVeteranStatus(client, interaction.guild, updated.author_id, guildConfig);
         }
 
         const embed = buildUpdatedReviewEmbed(
@@ -325,6 +379,10 @@ const faqModDeleteButton = {
     async execute(interaction, client, args) {
         const guildId = args?.[0] || interaction.guildId;
         const entryId = Number(args?.[1]);
+        if (!Number.isInteger(entryId) || entryId <= 0) {
+            return replyInvalidEntryId(interaction);
+        }
+
         const guildConfig = await getGuildConfig(client, guildId);
 
         if (!memberHasModerationCommandAccess(interaction.member, guildConfig, PermissionFlagsBits.ManageMessages)) {
@@ -349,6 +407,10 @@ const faqModDeleteButton = {
             });
         }
 
+        if (target.author_id && interaction.guild) {
+            await syncContributorVeteranStatus(client, interaction.guild, target.author_id, guildConfig);
+        }
+
         const embed = buildUpdatedReviewEmbed(
             target,
             `🗑️ Deleted by ${interaction.user.tag}`,
@@ -364,6 +426,21 @@ const faqModDeleteButton = {
     },
 };
 
+const faqApproveAliasButton = {
+    name: 'faq_approve',
+    execute: faqReviewApproveButton.execute,
+};
+
+const faqDisapproveAliasButton = {
+    name: 'faq_disapprove',
+    execute: faqReviewDisapproveButton.execute,
+};
+
+const faqDeleteAliasButton = {
+    name: 'faq_delete',
+    execute: faqModDeleteButton.execute,
+};
+
 export default [
     faqTeachButton,
     faqTeachModalHandler,
@@ -372,5 +449,7 @@ export default [
     faqReviewDisapproveButton,
     faqModApproveButton,
     faqModDeleteButton,
+    faqApproveAliasButton,
+    faqDisapproveAliasButton,
+    faqDeleteAliasButton,
 ];
-
