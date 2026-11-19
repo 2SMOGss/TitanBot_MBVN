@@ -266,9 +266,11 @@ export default {
             const { entry, updated } = result;
             logger.info(`Community FAQ entry #${entry.id} ${updated ? 'updated' : 'created'} by ${interaction.user.tag} (status=${entry.status})`);
 
+            let contributorInfo = {};
             if (entry.status === 'approved' && interaction.guild) {
-                await syncContributorVeteranStatus(client, interaction.guild, interaction.user.id, guildConfig);
-            } else if (entry.status === 'pending' && interaction.guild) {
+                contributorInfo = await syncContributorVeteranStatus(client, interaction.guild, interaction.user.id, guildConfig);
+            }
+            if (interaction.guild) {
                 await postFaqAuditReview({
                     client,
                     guild: interaction.guild,
@@ -277,6 +279,7 @@ export default {
                     answerer: interaction.user,
                     channelId: interaction.channelId,
                     updated,
+                    contributorInfo,
                     sourceLabel: '/ask teach_answer',
                 });
             }

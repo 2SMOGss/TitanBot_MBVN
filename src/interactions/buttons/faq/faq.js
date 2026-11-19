@@ -70,9 +70,11 @@ export async function handleFaqTeachModalSubmit(modalInteraction, client, guildI
     const { entry, updated } = result;
     logger.info(`Community FAQ entry #${entry.id} ${updated ? 'updated' : 'saved'} via modal by ${modalInteraction.user.tag} (status=${entry.status})`);
 
+    let contributorInfo = {};
     if (entry.status === 'approved' && modalInteraction.guild) {
-        await syncContributorVeteranStatus(client, modalInteraction.guild, modalInteraction.user.id, guildConfig);
-    } else if (entry.status === 'pending' && modalInteraction.guild) {
+        contributorInfo = await syncContributorVeteranStatus(client, modalInteraction.guild, modalInteraction.user.id, guildConfig);
+    }
+    if (modalInteraction.guild) {
         await postFaqAuditReview({
             client,
             guild: modalInteraction.guild,
@@ -81,6 +83,7 @@ export async function handleFaqTeachModalSubmit(modalInteraction, client, guildI
             answerer: modalInteraction.user,
             channelId: modalInteraction.channelId,
             updated,
+            contributorInfo,
             sourceLabel: 'Teach / Submit Modal',
         });
     }

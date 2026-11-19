@@ -8,6 +8,7 @@ import { createError, ErrorTypes } from '../utils/errorHandler.js';
 import { insertVerificationAudit } from '../utils/database.js';
 import { ensureTypedServiceError } from '../utils/serviceErrorBoundary.js';
 import { createEmbed } from '../utils/embeds.js';
+import { resolveAuditLogChannel } from './uplandFaqService.js';
 
 const verificationCooldowns = new Map();
 const attemptTracker = new Map();
@@ -104,27 +105,23 @@ export async function verifyUser(client, guildId, userId, options = {}) {
         });
 
         if (uplandUsername) {
-            const logChannelId = guildConfig?.logging?.channels?.audit;
-            if (logChannelId) {
-                const logChannel = guild.channels.cache.get(logChannelId) ||
-                    await guild.channels.fetch(logChannelId).catch(() => null);
-                if (logChannel?.isTextBased()) {
-                    const fields = [
-                        { name: '👤 Discord User', value: `<@${userId}> (\`${member.user.tag}\`)`, inline: true },
-                        { name: '🦙 Upland Username', value: `**${uplandUsername}**`, inline: true },
-                    ];
-                    if (homeCity) {
-                        fields.push({ name: '🏙️ Home City / Notes', value: homeCity, inline: true });
-                    }
-                    logChannel.send({
-                        embeds: [createEmbed({
-                            title: '✅ Member Verified (Upland IGN Linked)',
-                            color: 'success',
-                            fields,
-                            footer: `User ID: ${userId}`,
-                        })],
-                    }).catch(() => {});
+            const logChannel = await resolveAuditLogChannel(guild, guildConfig);
+            if (logChannel?.isTextBased()) {
+                const fields = [
+                    { name: '👤 Discord User', value: `<@${userId}> (\`${member.user.tag}\`)`, inline: true },
+                    { name: '🦙 Upland Username', value: `**${uplandUsername}**`, inline: true },
+                ];
+                if (homeCity) {
+                    fields.push({ name: '🏙️ Home City / Notes', value: homeCity, inline: true });
                 }
+                logChannel.send({
+                    embeds: [createEmbed({
+                        title: '✅ Member Verified (Upland IGN Linked)',
+                        color: 'success',
+                        fields,
+                        footer: `User ID: ${userId}`,
+                    })],
+                }).catch(() => {});
             }
         }
 

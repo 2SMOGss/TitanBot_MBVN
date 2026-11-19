@@ -1391,6 +1391,45 @@ export async function verifyAndDistillCommunityAnswer(question, candidateMessage
     return sanitizedCandidate;
 }
 
+export async function resolveAuditLogChannel(guild, guildConfig) {
+    if (!guild) return null;
+
+    const configuredId =
+        guildConfig?.logging?.channels?.audit ||
+        guildConfig?.logging?.channelId ||
+        guildConfig?.logChannelId ||
+        null;
+
+    if (configuredId) {
+        const byId = guild.channels?.cache?.get(configuredId) ||
+            await guild.channels?.fetch?.(configuredId).catch(() => null);
+        if (byId && byId.isTextBased?.()) {
+            return byId;
+        }
+    }
+
+    const FALLBACK_LOG_NAMES = new Set([
+        'bot-logs',
+        'bot-log',
+        'botlogs',
+        'audit-logs',
+        'audit-log',
+        'mod-logs',
+        'mod-log',
+    ]);
+
+    const channels = guild.channels?.cache?.size > 0
+        ? guild.channels.cache
+        : await guild.channels?.fetch?.().catch(() => guild.channels?.cache);
+
+    if (!channels) return null;
+
+    const matched = channels.find(
+        (ch) => ch && ch.isTextBased?.() && !ch.isThread?.() && FALLBACK_LOG_NAMES.has(String(ch.name || '').toLowerCase())
+    );
+    return matched || null;
+}
+
 /**
  * Post an audit card to the server's configured #bot-logs channel when a new FAQ is submitted or self-learned.
  */
@@ -1407,12 +1446,9 @@ export async function postFaqAuditReview({
     sourceLabel = 'Community Submission',
 }) {
     try {
-        const resolvedConfig = guildConfig || (guild ? await getGuildConfig(client, guild.id) : null);
-        const logChannelId = resolvedConfig?.logging?.channels?.audit;
-        if (!logChannelId || !guild) return false;
-
-        const logChannel = guild.channels.cache.get(logChannelId) ||
-            await guild.channels.fetch(logChannelId).catch(() => null);
+        if (!guild || !entry) return false;
+        const resolvedConfig = guildConfig || await getGuildConfig(client, guild.id);
+        const logChannel = await resolveAuditLogChannel(guild, resolvedConfig);
         if (!logChannel || !logChannel.isTextBased()) return false;
 
         const answersCount = contributorInfo.answersCount || 0;
