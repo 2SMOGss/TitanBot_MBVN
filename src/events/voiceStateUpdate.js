@@ -22,17 +22,27 @@ const MAX_TRACKED_COOLDOWNS = 10000;
 export default {
     name: 'voiceStateUpdate',
     async execute(oldState, newState, client) {
-        if (newState.member.user.bot) return;
+        if (client.config?.features?.music) {
+            handleMusicVoiceState(client, oldState, newState).catch((error) => {
+                logger.error('Music voice state handler error:', error);
+            });
+        }
 
-        const guildId = newState.guild.id;
-        const userId = newState.member.id;
+        if (newState.member?.user?.bot || oldState.member?.user?.bot) return;
+
+        const guild = newState.guild || oldState.guild;
+        const member = newState.member || oldState.member;
+        if (!guild || !member) return;
+
+        const guildId = guild.id;
+        const userId = member.id;
         const cooldownKey = `${guildId}-${userId}`;
         cleanupCooldownEntries();
 
         try {
             const config = await getJoinToCreateConfig(client, guildId);
 
-            if (!config.enabled || config.triggerChannels.length === 0) {
+            if (!config?.enabled || !Array.isArray(config.triggerChannels) || config.triggerChannels.length === 0) {
                 return;
             }
 
@@ -283,12 +293,6 @@ userLimit: userLimit === 0 ? undefined : userLimit,
             } catch (error) {
                 logger.error(`Failed to transfer ownership of channel ${channel.id}:`, error);
             }
-        }
-
-        if (client.config?.features?.music) {
-            handleMusicVoiceState(client, oldState, newState).catch((error) => {
-                logger.error('Music voice state handler error:', error);
-            });
         }
     }
 };

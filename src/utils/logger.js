@@ -154,6 +154,49 @@ const enforceLogSchema = format((info) => {
   return info;
 });
 
+const rawLogToFile = String(process.env.LOG_TO_FILE ?? 'true').trim().toLowerCase();
+const isFileLoggingEnabled = rawLogToFile !== 'false' && rawLogToFile !== '0';
+
+const fileTransports = isFileLoggingEnabled
+  ? [
+      new transports.DailyRotateFile({
+        filename: path.join(__dirname, '../../logs/error-%DATE%.log'),
+        level: 'error',
+        maxSize: '20m',
+        maxFiles: '14d',
+        zippedArchive: true,
+      }),
+      new transports.DailyRotateFile({
+        filename: path.join(__dirname, '../../logs/combined-%DATE%.log'),
+        maxSize: '20m',
+        maxFiles: '7d',
+        zippedArchive: true,
+      }),
+    ]
+  : [];
+
+const fileExceptionHandlers = isFileLoggingEnabled
+  ? [
+      new transports.DailyRotateFile({
+        filename: path.join(__dirname, '../../logs/exceptions-%DATE%.log'),
+        maxSize: '20m',
+        maxFiles: '14d',
+        zippedArchive: true,
+      }),
+    ]
+  : [];
+
+const fileRejectionHandlers = isFileLoggingEnabled
+  ? [
+      new transports.DailyRotateFile({
+        filename: path.join(__dirname, '../../logs/rejections-%DATE%.log'),
+        maxSize: '20m',
+        maxFiles: '14d',
+        zippedArchive: true,
+      }),
+    ]
+  : [];
+
 const logger = createLogger({
   level: resolvedLogLevel,
   format: combine(
@@ -164,37 +207,9 @@ const logger = createLogger({
     format.json()
   ),
   defaultMeta: { service: 'titan-bot' },
-  transports: [
-    new transports.DailyRotateFile({
-      filename: path.join(__dirname, '../../logs/error-%DATE%.log'),
-      level: 'error',
-      maxSize: '20m',
-      maxFiles: '14d',
-      zippedArchive: true,
-    }),
-    new transports.DailyRotateFile({
-      filename: path.join(__dirname, '../../logs/combined-%DATE%.log'),
-      maxSize: '20m',
-      maxFiles: '7d',
-      zippedArchive: true,
-    }),
-  ],
-  exceptionHandlers: [
-    new transports.DailyRotateFile({
-      filename: path.join(__dirname, '../../logs/exceptions-%DATE%.log'),
-      maxSize: '20m',
-      maxFiles: '14d',
-      zippedArchive: true,
-    }),
-  ],
-  rejectionHandlers: [
-    new transports.DailyRotateFile({
-      filename: path.join(__dirname, '../../logs/rejections-%DATE%.log'),
-      maxSize: '20m',
-      maxFiles: '14d',
-      zippedArchive: true,
-    }),
-  ],
+  transports: fileTransports,
+  exceptionHandlers: fileExceptionHandlers,
+  rejectionHandlers: fileRejectionHandlers,
 });
 
 if (process.env.NODE_ENV !== 'production') {

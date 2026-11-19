@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import { Client, Collection, GatewayIntentBits } from 'discord.js';
 import { REST } from '@discordjs/rest';
 import express from 'express';
@@ -45,6 +45,7 @@ class TitanBot extends Client {
     this.modals = new Collection();
     this.cooldowns = new Collection();
     this.db = null;
+    this.isShuttingDown = false;
     this.rest = new REST({ version: '10' }).setToken(config.bot.token);
   }
 
@@ -111,6 +112,12 @@ class TitanBot extends Client {
 
   startWebServer() {
     const app = express();
+    const trustProxySetting = process.env.TRUST_PROXY !== undefined
+      ? (process.env.TRUST_PROXY === 'false' || process.env.TRUST_PROXY === '0'
+        ? false
+        : (Number.isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY)))
+      : 1;
+    app.set('trust proxy', trustProxySetting);
     const configuredPort = Number(this.config.api?.port || process.env.PORT || 3000);
     const maxPortRetryAttempts = Number(process.env.PORT_RETRY_ATTEMPTS || 5);
     const host = process.env.WEB_HOST || '0.0.0.0';
@@ -135,24 +142,48 @@ class TitanBot extends Client {
     const requestCounts = new Map();
     const windowMs = this.config.api?.rateLimit?.windowMs || 60000;
     const maxRequests = this.config.api?.rateLimit?.max || 100;
+    const MAX_TRACKED_IPS = 10000;
+    let lastRateLimitSweep = Date.now();
     
     app.use((req, res, next) => {
-      const ip = req.ip;
+      if (req.path === '/health' || req.path === '/ready') {
+        return next();
+      }
+
+      const ip = req.ip || req.socket?.remoteAddress || 'unknown';
       const now = Date.now();
       const windowStart = now - windowMs;
-      
-      if (!requestCounts.has(ip)) {
-        requestCounts.set(ip, []);
+
+      if (now - lastRateLimitSweep > windowMs || requestCounts.size > MAX_TRACKED_IPS) {
+        lastRateLimitSweep = now;
+        for (const [trackedIp, entry] of requestCounts.entries()) {
+          if (now - entry.startTime > windowMs) {
+            requestCounts.delete(trackedIp);
+          }
+        }
+        while (requestCounts.size >= MAX_TRACKED_IPS) {
+          const oldestKey = requestCounts.keys().next().value;
+          if (oldestKey === undefined) break;
+          requestCounts.delete(oldestKey);
+        }
       }
-      
-      const times = requestCounts.get(ip).filter(t => t > windowStart);
-      
-      if (times.length >= maxRequests) {
+
+      let entry = requestCounts.get(ip);
+      if (!entry || now - entry.startTime > windowMs) {
+        entry = { startTime: now, times: [] };
+      }
+
+      entry.times = entry.times.filter(t => t > windowStart);
+
+      if (entry.times.length >= maxRequests) {
+        requestCounts.set(ip, entry);
         return res.status(429).json({ error: 'Too many requests' });
       }
-      
-      times.push(now);
-      requestCounts.set(ip, times);
+
+      entry.times.push(now);
+      entry.startTime = entry.times[0] || now;
+      requestCounts.delete(ip);
+      requestCounts.set(ip, entry);
       next();
     });
 
@@ -345,6 +376,12 @@ class TitanBot extends Client {
   }
 
   async shutdown(reason = 'UNKNOWN') {
+    if (this.isShuttingDown) {
+      logger.warn(`Shutdown already in progress; ignoring duplicate shutdown trigger (${reason})`);
+      return;
+    }
+    this.isShuttingDown = true;
+
     shutdownLog(`Bot is shutting down (${reason})...`);
     logger.info(`\n${'='.repeat(60)}`);
     logger.info(`🛑 Graceful Shutdown Initiated (${reason})`);

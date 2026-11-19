@@ -36,6 +36,22 @@ const COMMAND_ERROR_SUBTYPES = {
   greroll: 'giveaway_failed',
 };
 
+const MAX_COOLDOWN_ENTRIES = 5000;
+
+export function pruneClientCooldowns(cooldowns, now = Date.now(), maxEntries = MAX_COOLDOWN_ENTRIES) {
+  if (!cooldowns || typeof cooldowns.entries !== 'function') return;
+  for (const [key, expiresAt] of cooldowns.entries()) {
+    if (!expiresAt || now >= expiresAt) {
+      cooldowns.delete(key);
+    }
+  }
+  while (cooldowns.size > maxEntries) {
+    const oldestKey = cooldowns.keys().next().value;
+    if (oldestKey === undefined) break;
+    cooldowns.delete(oldestKey);
+  }
+}
+
 function withTraceContext(context = {}, traceContext = {}) {
   return {
     traceId: traceContext.traceId,
@@ -104,11 +120,15 @@ export default {
 
             const defaultCooldownSec = Number(botConfig.commands?.defaultCooldown) || 0;
             if (defaultCooldownSec > 0 && !isBotOwner(interaction.user.id)) {
+              const now = Date.now();
+              if (client.cooldowns.size >= MAX_COOLDOWN_ENTRIES) {
+                pruneClientCooldowns(client.cooldowns, now, MAX_COOLDOWN_ENTRIES - 1);
+              }
               const cooldownKey = `${interaction.user.id}:${interaction.commandName}`;
               const expiresAt = client.cooldowns.get(cooldownKey);
 
-              if (expiresAt && Date.now() < expiresAt) {
-                const remainingSec = Math.ceil((expiresAt - Date.now()) / 1000);
+              if (expiresAt && now < expiresAt) {
+                const remainingSec = Math.ceil((expiresAt - now) / 1000);
                 throw createError(
                   `Default command cooldown active for ${interaction.commandName}`,
                   ErrorTypes.RATE_LIMIT,
@@ -117,7 +137,8 @@ export default {
                 );
               }
 
-              client.cooldowns.set(cooldownKey, Date.now() + defaultCooldownSec * 1000);
+              client.cooldowns.delete(cooldownKey);
+              client.cooldowns.set(cooldownKey, now + defaultCooldownSec * 1000);
             }
 
             const abuseProtection = await enforceAbuseProtection(interaction, command, interaction.commandName);
@@ -248,7 +269,7 @@ export default {
                 return;
               }
 
-              const validPanels = [];
+              const validChoices = [];
               for (const panel of panels) {
                 if (!panel.messageId || !panel.channelId) {
                   continue;
@@ -265,37 +286,17 @@ export default {
                   await deleteReactionRoleMessage(client, guildId, panel.messageId).catch(() => {});
                   continue;
                 }
-                validPanels.push(panel);
+
+                if (validChoices.length < 25) {
+                  const title = msg?.embeds?.[0]?.title ?? 'Untitled Panel';
+                  const channelName = channel?.name ?? 'unknown';
+                  validChoices.push({
+                    name: `${title} (${channelName})`.substring(0, 100),
+                    value: panel.messageId
+                  });
+                }
               }
               
-              if (validPanels.length === 0) {
-                await interaction.respond([]);
-                return;
-              }
-              
-              const choices = await Promise.all(
-                validPanels.slice(0, 25).map(async panel => {
-                  try {
-                    const channel = guild.channels.cache.get(panel.channelId);
-                    if (!channel) return null;
-                    
-                    const msg = await channel.messages.fetch(panel.messageId).catch(() => null);
-                    if (!msg) return null;
-                    
-                    const title = msg?.embeds?.[0]?.title ?? 'Untitled Panel';
-                    const channelName = channel?.name ?? 'unknown';
-                    
-                    return {
-                      name: `${title} (${channelName})`.substring(0, 100),
-                      value: panel.messageId
-                    };
-                  } catch (e) {
-                    return null;
-                  }
-                })
-              );
-              
-              const validChoices = choices.filter(c => c !== null);
               await interaction.respond(validChoices);
             } catch (error) {
               logger.error('Error handling reactroles autocomplete:', {

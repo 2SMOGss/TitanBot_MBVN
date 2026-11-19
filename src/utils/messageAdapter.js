@@ -103,22 +103,52 @@ export function createMockInteraction(message, commandData, args) {
         return message.guild.members.cache.get(id) ?? null;
       },
       getChannel: (name) => {
-        const channelId = options.getString(name);
-        if (!channelId || !message.guild) return null;
+        const channelInput = options.getString(name);
+        if (!channelInput || !message.guild) return null;
 
-        const mentionMatch = channelId.match(/<#(\d+)>/);
-        const id = mentionMatch ? mentionMatch[1] : channelId;
+        const trimmed = String(channelInput).trim();
+        const mentionMatch = trimmed.match(/^<#(\d+)>$/) || trimmed.match(/<#(\d+)>/);
+        const id = mentionMatch ? mentionMatch[1] : trimmed;
 
-        return message.guild.channels.fetch(id).catch(() => null);
+        const mentionedChannel = message.mentions?.channels?.get?.(id);
+        if (mentionedChannel) {
+          return mentionedChannel;
+        }
+
+        const channelCache = message.guild.channels?.cache;
+        if (!channelCache) return null;
+
+        const byId = channelCache.get?.(id);
+        if (byId) {
+          return byId;
+        }
+
+        const normalizedName = trimmed.replace(/^#/, '').toLowerCase();
+        return channelCache.find?.((ch) => ch?.name?.toLowerCase() === normalizedName) ?? null;
       },
       getRole: (name) => {
-        const roleId = options.getString(name);
-        if (!roleId || !message.guild) return null;
+        const roleInput = options.getString(name);
+        if (!roleInput || !message.guild) return null;
 
-        const mentionMatch = roleId.match(/<@&(\d+)>/);
-        const id = mentionMatch ? mentionMatch[1] : roleId;
+        const trimmed = String(roleInput).trim();
+        const mentionMatch = trimmed.match(/^<@&(\d+)>$/) || trimmed.match(/<@&(\d+)>/);
+        const id = mentionMatch ? mentionMatch[1] : trimmed;
 
-        return message.guild.roles.fetch(id).catch(() => null);
+        const mentionedRole = message.mentions?.roles?.get?.(id);
+        if (mentionedRole) {
+          return mentionedRole;
+        }
+
+        const roleCache = message.guild.roles?.cache;
+        if (!roleCache) return null;
+
+        const byId = roleCache.get?.(id);
+        if (byId) {
+          return byId;
+        }
+
+        const normalizedName = trimmed.replace(/^@/, '').toLowerCase();
+        return roleCache.find?.((role) => role?.name?.toLowerCase() === normalizedName) ?? null;
       },
       getInteger: (name) => options.getInteger(name),
       getBoolean: (name) => options.getBoolean(name),

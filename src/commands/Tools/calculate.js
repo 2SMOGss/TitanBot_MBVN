@@ -13,8 +13,35 @@ function evaluate(expression) {
 
 const calculationHistory = new Map();
 const MAX_HISTORY = 5;
+const MAX_CALCULATION_ENTRIES = 1000;
+const CALCULATION_TTL_MS = 30 * 60 * 1000;
 
-export { calculationContexts };
+export function pruneCalculationState(now = Date.now(), maxEntries = MAX_CALCULATION_ENTRIES) {
+    for (const [key, ctx] of calculationContexts.entries()) {
+        if (ctx?.createdAt && now - ctx.createdAt > CALCULATION_TTL_MS) {
+            calculationContexts.delete(key);
+        }
+    }
+    while (calculationContexts.size > maxEntries) {
+        const oldestKey = calculationContexts.keys().next().value;
+        if (oldestKey === undefined) break;
+        calculationContexts.delete(oldestKey);
+    }
+
+    for (const [userId, history] of calculationHistory.entries()) {
+        const latestTimestamp = Array.isArray(history) && history[0]?.timestamp ? history[0].timestamp : 0;
+        if (latestTimestamp && now - latestTimestamp > CALCULATION_TTL_MS) {
+            calculationHistory.delete(userId);
+        }
+    }
+    while (calculationHistory.size > maxEntries) {
+        const oldestKey = calculationHistory.keys().next().value;
+        if (oldestKey === undefined) break;
+        calculationHistory.delete(oldestKey);
+    }
+}
+
+export { calculationContexts, calculationHistory };
 
 export default {
     data: new SlashCommandBuilder()
@@ -103,6 +130,9 @@ export default {
                 formattedResult = String(result);
             }
 
+            const now = Date.now();
+            pruneCalculationState(now, MAX_CALCULATION_ENTRIES - 1);
+
             const userId = interaction.user.id;
             if (!calculationHistory.has(userId)) {
                 calculationHistory.set(userId, []);
@@ -112,7 +142,7 @@ export default {
             history.unshift({
                 expression,
                 result: formattedResult,
-                timestamp: Date.now(),
+                timestamp: now,
             });
 
             if (history.length > MAX_HISTORY) {
@@ -217,14 +247,17 @@ export default {
                     }
 
                     try {
+                        pruneCalculationState(Date.now(), MAX_CALCULATION_ENTRIES - 1);
                         const contextKey = `${i.user.id}_${operation}`;
+                        calculationContexts.delete(contextKey);
                         calculationContexts.set(contextKey, {
                             expression,
                             formattedResult,
                             operator,
                             messageId: interaction.message?.id,
                             channelId: interaction.channelId,
-                            userId: i.user.id
+                            userId: i.user.id,
+                            createdAt: Date.now()
                         });
 
                         await i.showModal({

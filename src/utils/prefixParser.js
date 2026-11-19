@@ -29,7 +29,11 @@ export function parsePrefixCommand(content, prefix) {
   };
 }
 
-function parseArguments(input) {
+export function parseArguments(input) {
+  if (!input || typeof input !== 'string') {
+    return [];
+  }
+
   const args = [];
   let current = '';
   let inQuote = false;
@@ -37,29 +41,46 @@ function parseArguments(input) {
 
   for (let i = 0; i < input.length; i++) {
     const char = input[i];
+    const prevChar = i > 0 ? input[i - 1] : '';
+    const nextChar = i + 1 < input.length ? input[i + 1] : '';
 
     if (inQuote) {
       if (char === quoteChar) {
-        
+        const isClosingBoundary = nextChar === '' || /\s/.test(nextChar);
+        if (quoteChar === "'" && !isClosingBoundary) {
+          current += char;
+          continue;
+        }
+
         inQuote = false;
+        quoteChar = '';
         args.push(current);
         current = '';
       } else {
         current += char;
       }
     } else {
-      if (char === '"' || char === "'") {
-        
-        if (current.trim()) {
-          args.push(current.trim());
-          current = '';
+      const isAtTokenStart = current.length === 0 && (i === 0 || /\s/.test(prevChar));
+      if ((char === '"' || char === "'") && isAtTokenStart) {
+        if (char === "'") {
+          // Only open a single-quoted phrase if there is a matching closing single quote at a token boundary
+          let hasClosingSingleQuote = false;
+          for (let j = i + 1; j < input.length; j++) {
+            if (input[j] === "'" && (j + 1 === input.length || /\s/.test(input[j + 1]))) {
+              hasClosingSingleQuote = true;
+              break;
+            }
+          }
+          if (!hasClosingSingleQuote) {
+            current += char;
+            continue;
+          }
         }
         inQuote = true;
         quoteChar = char;
-      } else if (char === ' ') {
-        
-        if (current.trim()) {
-          args.push(current.trim());
+      } else if (/\s/.test(char)) {
+        if (current.length > 0) {
+          args.push(current);
           current = '';
         }
       } else {
@@ -68,8 +89,8 @@ function parseArguments(input) {
     }
   }
 
-  if (current.trim()) {
-    args.push(current.trim());
+  if (current.length > 0) {
+    args.push(current);
   }
 
   return args;

@@ -38,6 +38,26 @@ const RISKY_COMMAND_NAMES = new Set([
 ]);
 
 const blockedAttemptStore = new Map();
+export const MAX_BLOCKED_ATTEMPT_ENTRIES = 5000;
+
+export function pruneBlockedAttemptStore(now = Date.now(), maxEntries = MAX_BLOCKED_ATTEMPT_ENTRIES) {
+  for (const [key, entry] of blockedAttemptStore.entries()) {
+    const ttl = entry.windowMs || DEFAULT_ANOMALY_POLICY.windowMs;
+    if (now - entry.windowStart > ttl) {
+      blockedAttemptStore.delete(key);
+    }
+  }
+
+  while (blockedAttemptStore.size > maxEntries) {
+    const oldestKey = blockedAttemptStore.keys().next().value;
+    if (oldestKey === undefined) break;
+    blockedAttemptStore.delete(oldestKey);
+  }
+}
+
+export function getBlockedAttemptStoreSize() {
+  return blockedAttemptStore.size;
+}
 
 function normalizeCommandCategory(command) {
   return String(command?.category || '').trim().toLowerCase();
@@ -80,12 +100,18 @@ function getProtectionKey(interaction, commandName) {
 function recordBlockedAttempt(key, commandName, interaction, command, remainingMs) {
   const now = Date.now();
   const anomalyPolicy = getAnomalyPolicy(command);
+  if (blockedAttemptStore.size >= MAX_BLOCKED_ATTEMPT_ENTRIES) {
+    pruneBlockedAttemptStore(now, MAX_BLOCKED_ATTEMPT_ENTRIES - 1);
+  }
+
   const current = blockedAttemptStore.get(key);
 
   if (!current || now - current.windowStart > anomalyPolicy.windowMs) {
+    blockedAttemptStore.delete(key);
     blockedAttemptStore.set(key, {
       count: 1,
       windowStart: now,
+      windowMs: anomalyPolicy.windowMs,
       thresholdReachedAt: null
     });
     return;
