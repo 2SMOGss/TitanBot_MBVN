@@ -154,14 +154,6 @@ const faqTeachButton = {
     },
 };
 
-const faqTeachModalHandler = {
-    name: 'faq_teach_modal',
-    async execute(interaction, client, args) {
-        const guildId = args?.[0] || interaction.guildId || 'global';
-        await handleFaqTeachModalSubmit(interaction, client, guildId);
-    },
-};
-
 const faqListButton = {
     name: 'faq_list',
     async execute(interaction, client, args) {
@@ -446,7 +438,6 @@ const faqDeleteAliasButton = {
 
 export default [
     faqTeachButton,
-    faqTeachModalHandler,
     faqListButton,
     faqReviewApproveButton,
     faqReviewDisapproveButton,
