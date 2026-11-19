@@ -15,6 +15,7 @@ const { resolveSslConfig } = await import('../src/config/database/postgres.js');
 const {
   tableStatements,
   indexStatements,
+  migrationStatements,
   UPDATE_TIMESTAMP_FUNCTION,
   triggerDefinitions,
 } = await import('../src/utils/database/schema.js');
@@ -76,6 +77,24 @@ const createTables = async (client) => {
       await client.query(statement);
     } catch (error) {
       logger.error(`❌ Error creating table: ${error.message}`);
+      throw error;
+    }
+  }
+
+  const faqMigrations = migrationStatements?.length
+    ? migrationStatements
+    : [
+      `ALTER TABLE upland_faq_entries ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved';`,
+      `ALTER TABLE upland_faq_entries ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR(32);`,
+      `ALTER TABLE upland_faq_entries ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;`,
+      `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_status ON upland_faq_entries(status);`,
+    ];
+
+  for (const statement of faqMigrations) {
+    try {
+      await client.query(statement);
+    } catch (error) {
+      logger.error(`❌ Error applying column migration: ${error.message}`);
       throw error;
     }
   }

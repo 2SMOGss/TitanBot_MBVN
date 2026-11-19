@@ -14,6 +14,8 @@ import {
     listCommunityAnswers,
     deleteCommunityAnswer,
     registerPendingQuestion,
+    memberHasVeteranAccess,
+    postFaqAuditReview,
 } from '../../services/uplandFaqService.js';
 import { logger } from '../../utils/logger.js';
 
@@ -161,6 +163,7 @@ export default {
                 askerId: interaction.user?.id || interaction.author?.id,
                 askerTag: interaction.user?.tag || interaction.author?.tag,
                 messageId: interaction.id,
+                questionMessageId: interaction.id,
                 botReplyId: sentMsg?.id || null,
             });
         }
@@ -175,28 +178,52 @@ export default {
         const teachAnswer = interaction.options.getString('teach_answer', false)?.trim();
 
         if (teachAnswer) {
-            const isVerifiedStaff = memberHasModerationCommandAccess(
-                interaction.member,
-                guildConfig,
-                PermissionFlagsBits.ManageMessages
-            );
+            const isStaffOrVeteran = memberHasVeteranAccess(interaction.member, guildConfig);
 
-            const { entry, updated } = await addCommunityAnswer(client, {
+            const result = await addCommunityAnswer(client, {
                 guildId,
                 question,
                 answer: teachAnswer,
                 authorId: interaction.user.id,
                 authorTag: interaction.user.tag,
-                verified: isVerifiedStaff,
+                verified: isStaffOrVeteran,
+                isStaffOrVeteran,
             });
 
-            logger.info(`Community FAQ entry #${entry.id} ${updated ? 'updated' : 'created'} by ${interaction.user.tag}`);
+            if (result?.blocked) {
+                await InteractionHelper.safeEditReply(interaction, {
+                    embeds: [
+                        createEmbed({
+                            title: '🔒 Verified FAQ Entry Protected',
+                            description: `This question already has a verified **Staff / Veteran** answer (Entry **#${result.entry?.id || '?'}**) and cannot be overwritten by non-staff members.`,
+                            color: 'warning',
+                        }),
+                    ],
+                });
+                return;
+            }
+
+            const { entry, updated } = result;
+            logger.info(`Community FAQ entry #${entry.id} ${updated ? 'updated' : 'created'} by ${interaction.user.tag} (status=${entry.status})`);
+
+            if (entry.status === 'pending' && interaction.guild) {
+                await postFaqAuditReview({
+                    client,
+                    guild: interaction.guild,
+                    guildConfig,
+                    entry,
+                    answerer: interaction.user,
+                    channelId: interaction.channelId,
+                    updated,
+                    sourceLabel: '/ask teach_answer',
+                });
+            }
 
             await InteractionHelper.safeEditReply(interaction, {
                 embeds: [
                     successEmbed(
                         updated ? `Updated Community FAQ #${entry.id}` : `Saved to Community FAQ Database (#${entry.id})`,
-                        `**Question:** ${entry.question}\n\n**Answer:**\n${entry.answer}\n\n*Contributed by <@${interaction.user.id}>${isVerifiedStaff ? ' (✅ Verified Staff)' : ''}*`
+                        `**Question:** ${entry.question}\n\n**Answer:**\n${entry.answer}\n\n*Contributed by <@${interaction.user.id}>${isStaffOrVeteran ? ' (✅ Verified Staff/Veteran)' : ' (⏳ Pending Moderator/Veteran Approval)'}*`
                     ),
                 ],
             });

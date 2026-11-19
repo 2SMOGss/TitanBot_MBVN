@@ -10,15 +10,83 @@ import { buildCommunityFaqListEmbed, buildFaqActionRow } from '../../../commands
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
 import { getGuildConfig } from '../../../services/config/guildConfig.js';
 import { memberHasModerationCommandAccess } from '../../../utils/permissionGuard.js';
-import { createEmbed } from '../../../utils/embeds.js';
+import { createEmbed, successEmbed } from '../../../utils/embeds.js';
+import { logger } from '../../../utils/logger.js';
 import {
+    addCommunityAnswer,
     memberHasVeteranAccess,
     reviewCommunityAnswer,
     deleteCommunityAnswer,
     getCommunityAnswerById,
     buildFaqReviewRow,
     buildModReviewRow,
+    postFaqAuditReview,
 } from '../../../services/uplandFaqService.js';
+
+export async function handleFaqTeachModalSubmit(modalInteraction, client, guildIdArg = null) {
+    const guildId = guildIdArg || modalInteraction.guildId || 'global';
+    const deferSuccess = await InteractionHelper.safeDefer(modalInteraction, { flags: MessageFlags.Ephemeral });
+    if (!deferSuccess) return;
+
+    const question = modalInteraction.fields.getTextInputValue('faq_question')?.trim();
+    const answer = modalInteraction.fields.getTextInputValue('faq_answer')?.trim();
+
+    const guildConfig = modalInteraction.guild
+        ? await getGuildConfig(client, modalInteraction.guild.id)
+        : null;
+
+    const isStaffOrVeteran = memberHasVeteranAccess(modalInteraction.member, guildConfig);
+
+    const result = await addCommunityAnswer(client, {
+        guildId,
+        question,
+        answer,
+        authorId: modalInteraction.user.id,
+        authorTag: modalInteraction.user.tag,
+        verified: isStaffOrVeteran,
+        isStaffOrVeteran,
+    });
+
+    if (result?.blocked) {
+        await InteractionHelper.safeEditReply(modalInteraction, {
+            embeds: [
+                createEmbed({
+                    title: '🔒 Verified FAQ Entry Protected',
+                    description: `This question already has a verified **Staff / Veteran** answer (Entry **#${result.entry?.id || '?'}**) and cannot be overwritten by non-staff members.`,
+                    color: 'warning',
+                }),
+            ],
+            components: [buildFaqActionRow(guildId)],
+        });
+        return;
+    }
+
+    const { entry, updated } = result;
+    logger.info(`Community FAQ entry #${entry.id} ${updated ? 'updated' : 'saved'} via modal by ${modalInteraction.user.tag} (status=${entry.status})`);
+
+    if (entry.status === 'pending' && modalInteraction.guild) {
+        await postFaqAuditReview({
+            client,
+            guild: modalInteraction.guild,
+            guildConfig,
+            entry,
+            answerer: modalInteraction.user,
+            channelId: modalInteraction.channelId,
+            updated,
+            sourceLabel: 'Teach / Submit Modal',
+        });
+    }
+
+    await InteractionHelper.safeEditReply(modalInteraction, {
+        embeds: [
+            successEmbed(
+                updated ? `Updated Community FAQ #${entry.id}` : `Saved to Community FAQ Database (#${entry.id})`,
+                `**Question:** ${entry.question}\n\n**Answer:**\n${entry.answer}\n\n*Submitted by <@${modalInteraction.user.id}>${isStaffOrVeteran ? ' (✅ Verified Staff/Veteran)' : ' (⏳ Pending Moderator/Veteran Approval)'}.*`
+            ),
+        ],
+        components: [buildFaqActionRow(guildId)],
+    });
+}
 
 const faqTeachButton = {
     name: 'faq_teach',
@@ -26,9 +94,10 @@ const faqTeachButton = {
         const guildId = args?.[0] || interaction.guildId || 'global';
         const embedTitle = interaction.message?.embeds?.[0]?.title || '';
         const prefillQuestion = embedTitle.replace(/^🦙\s*/, '').replace(/^📚.*$/, '').trim();
+        const modalCustomId = `faq_teach_inline:${guildId}:${interaction.id}`;
 
         const modal = new ModalBuilder()
-            .setCustomId(`faq_teach_modal:${guildId}`)
+            .setCustomId(modalCustomId)
             .setTitle('💡 Teach / Submit Upland Answer');
 
         const questionInput = new TextInputBuilder()
@@ -58,6 +127,27 @@ const faqTeachButton = {
         );
 
         await interaction.showModal(modal);
+
+        if (typeof interaction.awaitModalSubmit === 'function') {
+            const submitted = await interaction
+                .awaitModalSubmit({
+                    time: 5 * 60 * 1000,
+                    filter: (i) => i.customId === modalCustomId && i.user.id === interaction.user.id,
+                })
+                .catch(() => null);
+
+            if (submitted) {
+                await handleFaqTeachModalSubmit(submitted, client, guildId);
+            }
+        }
+    },
+};
+
+const faqTeachModalHandler = {
+    name: 'faq_teach_modal',
+    async execute(interaction, client, args) {
+        const guildId = args?.[0] || interaction.guildId || 'global';
+        await handleFaqTeachModalSubmit(interaction, client, guildId);
     },
 };
 
@@ -276,9 +366,11 @@ const faqModDeleteButton = {
 
 export default [
     faqTeachButton,
+    faqTeachModalHandler,
     faqListButton,
     faqReviewApproveButton,
     faqReviewDisapproveButton,
     faqModApproveButton,
     faqModDeleteButton,
 ];
+

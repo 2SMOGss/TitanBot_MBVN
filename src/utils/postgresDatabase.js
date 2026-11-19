@@ -17,6 +17,7 @@ import { runKeyMigration } from './database/keyMigration.js';
 import {
     tableStatements,
     indexStatements,
+    migrationStatements,
     UPDATE_TIMESTAMP_FUNCTION,
     triggerDefinitions,
 } from './database/schema.js';
@@ -279,6 +280,23 @@ class PostgreSQLDatabase {
                 await this.pool.query(table);
             } catch (error) {
                 logger.error('Error creating table:', error);
+            }
+        }
+
+        const faqMigrationSql = migrationStatements?.length
+            ? migrationStatements
+            : [
+                `ALTER TABLE upland_faq_entries ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved';`,
+                `ALTER TABLE upland_faq_entries ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR(32);`,
+                `ALTER TABLE upland_faq_entries ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;`,
+                `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_status ON upland_faq_entries(status);`,
+            ];
+
+        for (const statement of faqMigrationSql) {
+            try {
+                await this.pool.query(statement);
+            } catch (error) {
+                logger.warn('Error applying schema column migration:', error.message);
             }
         }
         

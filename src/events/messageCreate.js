@@ -50,9 +50,10 @@ export default {
         }
       }
 
-      const prefixHandled = await handlePrefixCommand(message, client);
+      const guildConfig = await getGuildConfig(client, message.guild.id);
+      const prefixHandled = await handlePrefixCommand(message, client, guildConfig);
       if (!prefixHandled) {
-        await handlePassiveFaqMessage(message, client, buildAskResponseEmbed);
+        await handlePassiveFaqMessage(message, client, buildAskResponseEmbed, guildConfig);
       }
 
       await handleLeveling(message, client);
@@ -62,9 +63,9 @@ export default {
   }
 };
 
-async function handlePrefixCommand(message, client) {
+async function handlePrefixCommand(message, client, preloadedGuildConfig = null) {
   try {
-    const guildConfig = await getGuildConfig(client, message.guild.id);
+    const guildConfig = preloadedGuildConfig || await getGuildConfig(client, message.guild.id);
     const prefix = guildConfig?.prefix || getCommandPrefix();
     const parsed = parsePrefixCommand(message.content, prefix);
     

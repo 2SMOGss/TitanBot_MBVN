@@ -223,9 +223,17 @@ export const indexStatements = [
     `CREATE INDEX IF NOT EXISTS idx_verification_audit_created_at ON ${t.verification_audit}(created_at)`,
     `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_guild_id ON ${t.upland_faq_entries}(guild_id)`,
     `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_created_at ON ${t.upland_faq_entries}(created_at DESC)`,
-    `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_status ON ${t.upland_faq_entries}(guild_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_status ON ${t.upland_faq_entries}(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_guild_status ON ${t.upland_faq_entries}(guild_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_temp_data_expires_at ON ${t.temp_data}(expires_at)`,
     `CREATE INDEX IF NOT EXISTS idx_cache_data_expires_at ON ${t.cache_data}(expires_at)`,
+];
+
+export const migrationStatements = [
+    `ALTER TABLE ${t.upland_faq_entries} ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved'`,
+    `ALTER TABLE ${t.upland_faq_entries} ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR(32)`,
+    `ALTER TABLE ${t.upland_faq_entries} ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`,
+    `CREATE INDEX IF NOT EXISTS idx_upland_faq_entries_status ON ${t.upland_faq_entries}(status)`,
 ];
 
 export const UPDATE_TIMESTAMP_FUNCTION = `
