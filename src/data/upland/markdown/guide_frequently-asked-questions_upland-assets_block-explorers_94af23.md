@@ -1,0 +1,16 @@
+# Block Explorers : Upland Guide
+
+**Source:** https://upland-guide.com/frequently-asked-questions/upland-assets/block-explorers
+Block Explorers are different avatars that you can used and are your [identity in the game](https://upland-guide.com/community/3d-avatar-identity). They also have [stamina](https://upland-guide.com/frequently-asked-questions/upland-assets/block-explorers/stamina), that influences the amount of [troves](https://upland-guide.com/uppies/troves)each one can collect and in the future they will also become drivers in car races. There are some standard avatars that can be chosen that Upland provides based on your [status within the game](https://upland-guide.com/upland-status). All block explorers (with the exception of the standard ones provided) are assets that you own. Each one has its own description and quantities that exist. Block Explorers can be bought from the Upland store, or on [Opensea](https://opensea.io/collection/uplandblockexplorers), player run [metaventures](https://upland-guide.com/metaventures/block-explorer-shops), or earned by participating in events or challenges. See here the [block explorer directory](https://upland-guide.com/frequently-asked-questions/upland-assets/block-explorers/block-explorer-directory) to learn about a block explorer's origin, when and under what circumstances it was issued.
+
+Block explorers are your identity in the game. When you [define your Upland home](https://upland-guide.com/community/governance-and-voting), you are also able to generate a custom profile picture with your block explorer. Below is an example of mine with [Dale the Llama](https://upland-guide.com/about/meet-dale), and [learn more about creating your metaverse identity here.](https://upland-guide.com/community/3d-avatar-identity)
+
+Some of the most coveted block explorers are terraformers and wizards, which are introduced when new features are introduced into the metaverse. Learn more about [terraformers and wizards](https://upland-guide.com/frequently-asked-questions/upland-assets/block-explorers/terraformer-wizard) here.
+
+With the introduction of cars, the different block explorers will be drivers of the cars. If you plan on participating in car racing, it will be important to have a quality driver. Since every block explorer is unique, each explorer will also have different characteristics and driving abilities. Watch the video below to learn a bit more, and also read up about [cars in Upland](https://upland-guide.com/cars-update).
+
+Up until 2026, players who reached Director status, were able to travel to [City Hall in San Francisco](https://upland-guide.com/frequently-asked-questions/upland-city-hall) to [apply for a custom 1 of 1 block explorer](https://youtu.be/rtHfIlwNSrQ).
+
+Watch more through the [Upland Guide YouTube playlist about block explorers](https://youtube.com/playlist?list=PL3zT4OlFr_bnfQj1WVrittjF_DZdh7cQP), or [browse through all the different playlists](https://upland-guide.com/about/youtube-directory) the Upland Guide has to learn everything you need to know about the Metaverse.
+
+[Back to assets](https://upland-guide.com/frequently-asked-questions/upland-assets)

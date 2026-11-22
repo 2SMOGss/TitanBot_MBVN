@@ -1,0 +1,18 @@
+# Intro to Cars : Upland Guide
+
+**Source:** https://upland-guide.com/transportation/cars
+The introduction of cars to the metaverse creates a wide spectrum of additional ways to develop the metaverse, provide both social and monetary value to Uplanders and all people or entities within the metaverse. Just like in the real world, there is a process to create cars or other goods and this is [manufacturing](https://upland-guide.com/metaventures/manufacturing). Cars and all non living items in the metaverse will be manufactured using spark in manufacturing plants and sold within specific [metaventures](https://upland-guide.com/metaventures)called showrooms. The first car brand in Upland is their own brand M-Motors. It's manufacturing plant is located at 4220 Network Circle, Santa Clara, California.
+
+As an Uplander, it may be important for you to own a car as it will provide important utility within Upland. Once real time movement will be introduced, something like a car will be extremely important to get around quickly. Just like in the real world, if you don't have a car you will depend on others - public transportation, ride sharing, Ubers or taxi services. This could become critical if you want to purchase something from a store and you want to get there quickly because you think someone might purchase it first. A personal car can enable you the flexibility to travel where you want and when you want. Beyond travelling within a city, Upland has announced that there will be cities that are only accessible by car. Here I go into more detail about why you need a car in Upland.
+
+In addition to the future practical need to own a vehicle, you can also have fun racing one. Both cars and [karts](https://upland-guide.com/entertainment/car-racing/karts)can be used in racing, where you can compete with your friends and even [earn UPX for winning races](https://upland-guide.com/entertainment/car-racing/racing-for-stakes). Learn more about [car racing here](https://upland-guide.com/entertainment/car-racing).
+
+This provides a plethora of opportunities for people to provide services to other Uplanders in the category of transportation services - including both the transporting of both people and good. Another question arises as to how manufactured goods will be transported to the showrooms that will sell them to the end customer?
+
+Upland has introduced six different types of cars that will have different utilities in the metaverse. The six types are sedan, sports car, SUV, pick up truck, van , and semi-trailer. Learn more about each of the [MV-Motor car types](https://upland-guide.com/transportation/cars/mv-motors-cars) here. Here you can find the [production catalogue](https://upland-guide.com/transportation/cars/mv-motors-cars/production-catalogue) of all the different models that have been produced.
+
+Upland has not announced a lot of details about cars, but we know that to start, you must own a property in order to own a car as your car will have to be "parked" on one of your properties. We also know that in the future, your car will be powered by spark. A second element to cars will be car racing, where players will be able to [create speedway metaventure racetracks](https://upland-guide.com/metaventures/speedway-racetrack) and host races where other Uplanders to win prizes. [Learn more about car racing here.](https://upland-guide.com/entertainment/car-racing)
+
+We will be updating this page as more information about cars becomes available. Don't forget to subscribe to our [YouTube playlist dedicated specifically to updates about cars](https://youtube.com/playlist?list=PL3zT4OlFr_blGdQKlF10UEnSNurwXpSZE).
+
+[Back to transportation](https://upland-guide.com/transportation)

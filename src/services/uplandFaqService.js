@@ -1336,7 +1336,7 @@ export async function answerUplandQuestion(client, guildId, question, topKOrOpti
     }
 
     const strongOfficial = officialChunks
-        .filter((c) => c.score >= 2.2 && c.coverage >= 0.34 && (c.specificCoverage === undefined || c.specificCoverage >= 0.4))
+        .filter((c) => c.score >= 2.2 && c.coverage >= 0.55 && (c.specificCoverage === undefined || c.specificCoverage >= 0.4))
         .slice(0, 2);
 
     const hasKnowledgeMatch = communityMatches.length > 0 || strongOfficial.length > 0;

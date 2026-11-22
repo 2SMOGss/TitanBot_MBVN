@@ -1,0 +1,24 @@
+# Why Join Upland? : Upland Guide
+
+**Source:** https://upland-guide.com/about/join-upland-metaverse
+Metaverse, blockchain, NFTs, smart contracts. If these terms are new to you, you have come to the right place. Upland is a new type of game platform made possible thanks to the blockchain called "play and earn" gaming.
+
+Have you ever wanted to own a piece of land in your favorite city? [Upland](https://upland.me) is a virtual property trading game based on real-world addresses. The base of the game allows people to buy, collect, sell and trade the land. True ownership is secured on the blockchain and rewards players with Upland's in-game currency UPX. In addition to owning land you can own and collect NFTs of your favorite NFL Players, or soccer players. Upland already has partnership with [FIFA](https://upland-guide.com/upland-legits-main/fifa-world-cup-qatar-2022)and the [NFLPA](https://upland-guide.com/upland-legits-nfl/getting-started-with-nfl-legits). You can't rebuild the world without the ability to construct buildings and own [cars](https://upland-guide.com/transportation/cars)either!
+
+In Upland, [earnings can take many different forms](https://upland-guide.com/earning-in-upland), most intriguing being the ability to earn in USD! Whether you are a metaverse property realtor, collector of NFL player NFTs, a [spark](https://upland-guide.com/frequently-asked-questions/spark)construction worker, or a [metaventure](https://upland-guide.com/metaventures)business owner, new economies and jobs are being created within the metaverse. Digital creators are having new opportunities to monetize their creations in a way not previously possible prior to the existence of the blockchain.
+
+"Play, Earn, Connect" is the vision of Upland. Having the land divided by cities and neighborhoods just like in the real world creates an opportunity for people to connect and work together to build a community, develop their neighborhood and stand out. Building a desirable community to live in can increase the value of your properties if you are able to create a demand for people to live there. Additional rewards will be provided to strong neighborhoods who succeed in creating a developed neighborhood that includes buildings, metaventures, and a thriving community.
+
+Upland has a [licensing agreement with the NFL Players Association](http://upland-legits-nfl), enabling fans to "extend their real-life presence into the Upland metaverse and beyond. These new digital assets (NFTs) will enable fans to directly engage with the brands they love in an entirely new way!" You can collect [NFTs of your favorite players and teams](https://upland-guide.com/upland-legits-nfl), with the opportunity to get them digitally [autographed](https://upland-guide.com/upland-legits-nfl/upland-legits-nfl-types)by your favorite player!
+
+Upland is an excellent way to get your feet wet in this new emerging technology. You don't need any previous knowledge or understanding of the blockchain or cryptocurrencies to have fun, and earn. If you aren't convinced that the Metaverse is the future, check out why [Mark Zuckerberg is turning Facebook into a Metaverse company](https://www.theverge.com/22588022/mark-zuckerberg-facebook-ceo-metaverse-interview). Unlike many other virtual land platforms where the price of land can run you in upwards of hundreds or thousands of dollars, Upland always has fair-priced properties available for new players even under the equivalent of $3). There is a place for you in this metaverse even if you are not a big spender.
+
+Upland was founded in 2019 but don't be concerned, if you join today you are still an early adopter of this game. New features are constantly being added, and Upland is continuing to push the boundaries of what can be done on the EOS blockchain, and in the play to earn blockchain gaming space.
+
+Upland has published both a [roadmap](https://www.upland.me/roadmap)and a [whitepaper](https://www.upland.me/white-llama-paper) that go into great detail about what Upland is, and more importantly where they are headed. You can also see here [all the things you can currently do in Upland](https://upland-guide.com/what-to-do-in-upland).
+
+Now is the time to get started by creating your presence in the Metaverse. As an early adopter, the potential for fast growth is evident. Check out the [Upland Guide bonuses when you sign up with us!](https://upland-guide.com/referral-bonus) That page will help you define your starting strategy and help set you up for success in the metaverse!
+
+After doing your homework, if you want advice on what city to start in, send us a message using the blue button in the bottom right corner or jump into our [discor](https://discord.gg/rTcdta6wSt)[d server](https://discord.gg/9mxzXcNt) for more information.
+
+We look forward to seeing you in the metaverse!

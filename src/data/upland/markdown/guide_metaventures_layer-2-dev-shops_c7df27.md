@@ -1,0 +1,12 @@
+# Upland Layer 2 - Dev Shops : Upland Guide
+
+**Source:** https://upland-guide.com/metaventures/layer-2-dev-shops
+The Upland Metaverse is not limited to the experiences that Upland creates. As a create and earn metaverse, anyone has the opportunity to be a contributor to the metaverse. From creating games, to experiences, if you can imagine it, you can do it! Upland has created the [Upland Developer Network (UDN)](https://www.upland.me/events/the-upland-developers-network) and [UDN Pro](https://www.upland.me/events/applications-to-become-a-udnpro-are-now-open)for players to be able to access the community developer tools. These will enable you to integrate your 3rd party tool into Upland. The best part is that there is no web 3.0 or blockchain knowledge required! If you are already a developer - whether it be 2D, 3D, or VR experiences you can get started in Upland right away!
+
+These experiences that you can now create can integrate Upland's assets. You even have the ability to create your own in game assets through [manufacturing](https://upland-guide.com/metaventures/manufacturing) and use these in a game that you create. Watch the video below to learn more about Upland Layer 2, and an example of what you can do. The example discussed explains how the Upland metaverse can elevate assets or NFTs created around a specific game, giving its players ownership over the assets used and earned through the game or experience. [NFT token gating](https://upland-guide.com/metaventures/layer-2-dev-shops/nft-token-gating) has never been easier with the Upland Metaverse.
+
+If you are a developer, and new to the Metaverse, you can [learn how YK2012 and the Upland Guide can help to get you](https://upland-guide.com/about/consulting-services) started about learning about Upland, and how to best implement your game/experience within the Metaverse.
+
+Any experience you create will require the creation of a [metaventure](https://upland-guide.com/metaventures). This new type will be called "Dev Shops" and will be identified by a purple dot on the map. If you plan on creating a Dev Shop, also check out the [Upland Guide Maps](https://upland-guide.com/fundamentals/maps) and our free [business directory](https://upland-guide.com/business-directory/business-community-category/upland-metaventures) for other advertising opportunities.
+
+Back to [metaventures](https://upland-guide.com/metaventures)

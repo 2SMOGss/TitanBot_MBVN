@@ -1,0 +1,18 @@
+# Nursery Metaventures : Upland Guide
+
+**Source:** https://upland-guide.com/metaventures/nursery
+Looking to build a garden or add greenery to your Upland property? Nursery metaventures are the first step in this important stage of adding life to the Upland metaverse
+
+Looking to build a garden or add greenery to your Upland property? Nursery metaventures are the first step in this important stage of adding [life](https://upland-guide.com/fundamentals/life)to the Upland metaverse. Nurseries facilitate the buying and selling of “[Seed Legits](https://upland-guide.com/frequently-asked-questions/upland-assets/upland-legits/seed-legits)”. You can trade your seed Legit for an [ornamental plant](https://upland-guide.com/frequently-asked-questions/upland-assets/ornamental-plants) by burning the Legit. Once planted, the living element will become not non-tradable.[Care for the wellbeing](https://upland-guide.com/frequently-asked-questions/upland-assets/ornamental-plants/health-and-wellbeing) of the plant as it grows and evolves over time. Be careful, because without proper care and feeding of [STEM](https://upland-guide.com/fundamentals/stem), they will wither away and die.
+
+Any player can open a Nursery, but players who place a totem on their Nursery will unlock additional utility for their metaventure. These upgraded Nurseries will enable players to spend Sparklet in exchange for a random seed Legit. The owner of the nursery will receive 5% of the value of the [sparklet](https://upland-guide.com/economy/sparklet)spent in UPX as commission for facilitating the legit generation. Generating seed legits from your own metaventure will not give you any UPX commission. The scarcity of these upgraded Nurseries will reward those who own and strategically activate totems on that property.
+
+Seed types will vary in rarity and availability based on location. For example, Palm Trees may be exclusive to Nurseries in cities like Miami and Los Angeles, while Pine Trees could be found only in Lake Tahoe or Park City. This adds a unique geographical layer to plant discovery and trade, enhancing the connection between Life and the Upland map. The only type of seeds that are not generated at nurseries are [grass and sod](https://upland-guide.com/frequently-asked-questions/upland-assets/ornamental-plants/grass-and-sod), which can be purchased from the Upland store.
+
+To get started, go to the [Upland store](https://upland-guide.com/fundamentals/upland-upx-store)and purchase the nursery structure for 50,000 UPX. Like a [service structure](https://upland-guide.com/frequently-asked-questions/upland-assets/structure-types/service-structures), this model will be available in your account to build on any property it fits. You can build as many as you want. The nursery also has a 3.7 employment units meaning that in the future you will be able to [employ your uppies](https://upland-guide.com/uppies/employing-uppies) at the nursery and increase your [influence score](https://upland-guide.com/uppies/influence-score). Alternatively to purchasing the structure, you can utilize the [construction hub](https://upland-guide.com/frequently-asked-questions/upland-assets/structure-types/construction-hub) to outsource the start of construction if you don't plan on building many nurseries.
+
+Get stared with gardening, and read more about the [Upland Guide's 5 Steps to Thriving at gardening.](https://open.substack.com/pub/uplandguide/p/the-ultimate-guide-to-gardening-in-the-metaverse)
+
+[Learn about the pros and cons of opening a nursery in this video.](https://youtu.be/JIW8T6rNhpo)
+
+[Back to Metaventures](https://upland-guide.com/metaventures)

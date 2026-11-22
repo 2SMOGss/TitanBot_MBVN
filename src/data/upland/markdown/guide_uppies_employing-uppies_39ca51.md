@@ -1,0 +1,12 @@
+# Employing Uppies : Upland Guide
+
+**Source:** https://upland-guide.com/uppies/employing-uppies
+Your mintable Uppies will be employable in your [service structures](https://upland-guide.com/frequently-asked-questions/upland-assets/structure-types/service-structures) and provide much needed help to attract more Uppies to your neighborhood. Of all the Uppies, only Uppies that are level 5 or above will be employable. Every service structure will be able to employ a different number of Uppies. The mechanic behind Uppie employment will be similar to that of property collections. Your Uppie will be tied to that service structure, and you will not be able to place that Uppie in a [variety shop metaventure](https://upland-guide.com/metaventures/variety-legits-shop) for sale or to trade it without first removing him from his job at the service structure. When employing an Uppie, you will be providing a boost to the service score of the service structure.
+
+The higher the [level of your Uppie](https://upland-guide.com/uppies/levels), the larger the boost he will provide to your service score when employed. This will in turn increase your [influence score](https://upland-guide.com/uppies/influence-score) and the desirability of Uppies to live in that neighborhood, thus increasing the [residents score](https://upland-guide.com/uppies/residents-score). Additionally the Uppie will unlock chances of better [trove](https://upland-guide.com/uppies/troves)drops from [recipes](https://upland-guide.com/uppies/troves/recipes).
+
+In addition to these additional boosts, this employed Uppie will automate the collection of troves at that service structure. An Uppie’s collection capacity is based on its own level, with higher-level Uppies able to collect more Troves for you automatically from the service structure they’re employed at each day. As you look to collect different troves, you will be able to move these Uppies between your different service structures.
+
+There is a lot of strategy required in determining what Uppie you will employ in your service structure. To level up your Uppie, you are required to merge 2 Uppies of the previous level (merge (delete) 2 level 6 Uppies to get one level 7 Uppie). [Learn more about this process here.](https://upland-guide.com/uppies/uppy-merge) As the level of your Uppie increases, you will receive a larger boost to the service score, but at the risks of essentially losing an Uppie, maybe you don't have enough Uppies to work at all your service structures.
+
+[Back to Uppies](https://upland-guide.com/uppies)
