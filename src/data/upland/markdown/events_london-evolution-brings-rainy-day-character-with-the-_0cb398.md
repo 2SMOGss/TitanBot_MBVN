@@ -1,9 +1,8 @@
 # London Evolution Brings Rainy-Day Character With The Brolly Shoppe | Upland
-**Source URL:** https://www.upland.me/events/london-evolution-brings-rainy-day-character-with-the-brolly-shoppe
-**Scraped At:** 2026-11-16T14:47:54.930558+00:00
+
+**Source:** https://www.upland.me/events/london-evolution-brings-rainy-day-character-with-the-brolly-shoppe
 
 ---
-
 # London Evolution Brings Rainy-Day Character With The Brolly Shoppe
 
 November 13, 2026
@@ -57,3 +56,5 @@ Like other modular structures, it supports flexible building and long-term custo
 ### Looking Ahead
 
 This London Evolution release is about adding depth to an existing city rather than opening new territory. With new property access, pack-level chances at existing London Collections, and **The Brolly Shoppe bringing rainy-day personality to the European modular lineup**, players have more ways to shape their place in London.
+
+[jump in](https://discover.upland.me/hp-sign-up)[More events](https://www.upland.me/events)

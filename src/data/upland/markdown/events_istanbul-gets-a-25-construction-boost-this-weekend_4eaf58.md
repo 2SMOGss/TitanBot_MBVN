@@ -1,9 +1,8 @@
 # Istanbul Gets a 25% Construction Boost This Weekend | Upland
-**Source URL:** https://www.upland.me/events/istanbul-gets-a-25-construction-boost-this-weekend
-**Scraped At:** 2026-11-16T14:47:55.926349+00:00
+
+**Source:** https://www.upland.me/events/istanbul-gets-a-25-construction-boost-this-weekend
 
 ---
-
 # Istanbul Gets a 25% Construction Boost This Weekend
 
 November 12, 2026
@@ -27,22 +26,20 @@ Bring back an Upland friend who has been away, invite someone new to discover th
 
 **The 25% event boost applies to one standalone structure at a time on each property in Istanbul**, prioritizing the structure closest to completion. Once that structure is finished, the boost moves to the next structure closest to completion. All structures continue receiving their staked SPARKLET, but only the selected structure receives the boost on contributions from the owner, other players, and deployed construction vehicles.
 
-**Construction Crews** operate as usual**.** On a property with multiple builds, the Construction Crew supports the structure closest to completion, then moves to the next closest.
+**Construction Crews **operate as usual**.** On a property with multiple builds, the Construction Crew supports the structure closest to completion, then moves to the next closest.
 
 Here are a few quick examples of effective construction power during the event:
 
 - **Your own stake:** 100 staked SPARKLET provides 125 construction power during the event.
 - **Help from another player or a vehicle:** Your 100 SPARKLET plus 100 from another player or a construction vehicle provides 250 total construction power.
 - **Combine all three:** Your 100 SPARKLET, another player’s 100, and a vehicle contributing 100 provides 375 total construction power.
-- **With a Construction Crew:** 100 staked SPARKLET plus three different vehicles contributing 100 each provides 507 construction power. The owner and vehicle contributions become 500 after the boost. The crew’s 5% bonus is separately boosted to 6.25% and rounded up to 7%, adding 7% more based on the 100 staked SPARKLET.
-
-These figures represent construction power, not extra SPARKLET deposited into your wallet. Vehicles contribute to the boosted build total rather than receiving a separate second 25% multiplier.
+- **With a Construction Crew:** 100 staked SPARKLET plus three different vehicles contributing 100 each provides 507 construction power. The owner and vehicle contributions become 500 after the boost. The crew’s 5% bonus is separately boosted to 6.25% and rounded up to 7%, adding 7% more based on the 100 staked SPARKLET. These figures represent construction power, not extra SPARKLET deposited into your wallet. Vehicles contribute to the boosted build total rather than receiving a separate second 25% multiplier.
 
 ### Construction Vehicles On Sale
 
 Three individual construction vehicles are going on sale alongside the boost weekend. Each can add construction power to an eligible build or its corresponding Service Structure when deployed on an eligible property the player owns. A vehicle can strengthen the boosted total this weekend, but no vehicle is required to participate.
 
-**New to Construction Vehicles**? Learn more about how vehicles work [**here**](https://upland.me/events/construction-boost-is-almost-here-get-ready-to-speed-up-your-builds) and how **Construction Crews** can give you even bigger boosts [**here**](https://www.upland.me/events/construction-crews-are-live-power-up-your-builds-like-never-before).
+**New to Construction Vehicles**? Learn more about how vehicles work [here](https://www.upland.me/events/construction-boost-is-almost-here-get-ready-to-speed-up-your-builds) and how **Construction Crews** can give you even bigger boosts [here](https://www.upland.me/events/construction-crews-are-live-power-up-your-builds-like-never-before).
 
 **Registration Opens:** Thursday, November 12, 2026 at 9 AM PT
 **Sale Begins:** Friday, November 13, 2026 at 9 AM PT
@@ -70,3 +67,5 @@ The Wrecking Ball Crane adds unmistakable heavy-machinery presence to an ambitio
 Get your Istanbul projects moving, rally your friends, and put the weekend boost to work. Invite back an Uplander who has been away or introduce someone new to the city, then build the neighborhoods and structures that will welcome Istanbul’s next residents.
 
 From one finished structure to the next, let’s build Istanbul together.
+
+[jump in](https://discover.upland.me/hp-sign-up)[More events](https://www.upland.me/events)

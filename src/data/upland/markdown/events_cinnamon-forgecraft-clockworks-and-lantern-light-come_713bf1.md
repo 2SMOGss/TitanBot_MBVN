@@ -1,16 +1,15 @@
 # Cinnamon, Forgecraft, Clockworks, and Lantern Light Come to Upland | Upland
-**Source URL:** https://www.upland.me/events/cinnamon-forgecraft-clockworks-and-lantern-light-come-to-upland
-**Scraped At:** 2026-11-16T14:47:56.420597+00:00
+
+**Source:** https://www.upland.me/events/cinnamon-forgecraft-clockworks-and-lantern-light-come-to-upland
 
 ---
-
 # Cinnamon, Forgecraft, Clockworks, and Lantern Light Come to Upland
 
 November 11, 2026
 
 This week’s four new **Service Structures** add one Entertainment destination and three Essential businesses to neighborhood builds. **Uppies** can stop for a cinnamon swirl, admire a rugged forge, meet at the clockworks, or bring lantern-shop warmth to a favorite street. Invite a friend back to explore the lineup, or bring someone new along to see what the community is building.
 
-These **Service Structures** will be available from **Wednesday, November 11 at 9 AM PT** for players with **Uplander status** and above. No registration is required. Once a player purchases one, it will disappear from that player’s store.
+These **Service Structures** will be available from **Wednesday, November 11 at 9 AM PT **for players with **Uplander status** and above. No registration is required. Once a player purchases one, it will disappear from that player’s store.
 
 ### One-Day Service Structure Value Pack
 
@@ -49,3 +48,5 @@ The Lantern & Wick Shoppe gives cozy districts a welcoming storefront, where **U
 Whether **Uppies** are choosing a cinnamon swirl, gathering near the forge, meeting at the clockworks, or browsing lanterns, this week’s **Service Structures** give players four more ways to shape neighborhoods with personality. Collectors who want all four can grab the one-day **Service Structure Value Pack** before it disappears. Share the lineup with a returning friend or someone discovering Upland for the first time.
 
 Keep shaping the neighborhoods that bring **Uppies** home.
+
+[jump in](https://discover.upland.me/hp-sign-up)[More events](https://www.upland.me/events)

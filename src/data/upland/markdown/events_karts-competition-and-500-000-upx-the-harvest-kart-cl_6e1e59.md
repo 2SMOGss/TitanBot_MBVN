@@ -1,16 +1,15 @@
 # Karts, Competition, and 500,000 UPX: The Harvest Kart Classic Is Here! | Upland
-**Source URL:** https://www.upland.me/events/karts-competition-and-500-000-upx-the-harvest-kart-classic-is-here
-**Scraped At:** 2026-11-16T14:47:55.417703+00:00
+
+**Source:** https://www.upland.me/events/karts-competition-and-500-000-upx-the-harvest-kart-classic-is-here
 
 ---
-
 # Karts, Competition, and 500,000 UPX: The Harvest Kart Classic Is Here!
 
 November 13, 2026
 
-*Editors Note: Kart Classic Leaderboard is* [*LIVE HERE*](https://datastudio.google.com/u/0/reporting/ebead2e2-5205-4690-a4d3-efc4dfaa019d)​
+*Editors Note: Kart Classic Leaderboard is *[LIVE HERE](https://datastudio.google.com/u/0/reporting/ebead2e2-5205-4690-a4d3-efc4dfaa019d)​
 
-Harvest season is here, and this weekend **Karts are taking the spotlight**. The **Harvest Kart Classic** brings three days of racing, **500,000 UPX in prizes**, and friendly rivalry to **Sunset Sprintway** in Los Angeles. If you have never raced a Kart, this is **your invitation** to take the starting line and set your first time.
+Harvest season is here, and this weekend **Karts are taking the spotlight**. The **Harvest Kart Classic** brings three days of racing, **500,000 UPX in prizes**, and friendly rivalry to **Sunset Sprintway **in Los Angeles. If you have never raced a Kart, this is **your invitation** to take the starting line and set your first time.
 
 Returning racers, bring your friends, line up together, and compare every run. Put down a time you are proud of, then come back the next day and try to beat it.
 
@@ -39,9 +38,7 @@ At the end of the event, your **three daily best times are added together**, and
 - **Daily Best Time**: Your fastest valid finish from your three official attempts becomes your time for that scoring window.
 - **Final Score**: Your three daily best times are added together, and the lowest combined time wins.
 - **Qualification**: You must record a valid time in all three scoring windows to qualify.
-- **Attempt Limits**: Starts after your first three official attempts cannot improve your score, and unused attempts do not carry over.
-
-Grab your Kart, invite a friend, and come back for each new scoring window to give it your best shot.
+- **Attempt Limits**: Starts after your first three official attempts cannot improve your score, and unused attempts do not carry over. Grab your Kart, invite a friend, and come back for each new scoring window to give it your best shot.
 
 ### Prize Pool
 
@@ -65,3 +62,5 @@ Don’t miss your chance to add some Harvest flair to your garage. **No purchase
 ### Join the Harvest Weekend
 
 Grab your friends, meet at Sunset Sprintway, and make this the weekend you try your first race or **set your next personal best**. Race together, compare times, and come back for another shot every scoring day.
+
+[jump in](https://discover.upland.me/hp-sign-up)[More events](https://www.upland.me/events)

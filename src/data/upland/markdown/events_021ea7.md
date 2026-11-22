@@ -1,10 +1,9 @@
 # Upland
-**Source URL:** https://www.upland.me/events
-**Scraped At:** 2026-11-16T14:47:53.828432+00:00
+
+**Source:** https://www.upland.me/events
 
 ---
-
-**Summary:** Play, Earn, Connect & Rebuild the Real World.
+Real-World City-Builder
 
 News & Events
 
