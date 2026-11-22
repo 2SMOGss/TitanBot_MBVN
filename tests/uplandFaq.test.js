@@ -16,6 +16,7 @@ import {
   retrieveOfficialChunks,
   parseMarkdownSourceUrl,
   parseUnansweredResponse,
+  answerUplandQuestion,
   VETERAN_ANSWER_THRESHOLD,
 } from '../src/services/uplandFaqService.js';
 import { isValidFaqEntryId } from '../src/interactions/buttons/faq/faq.js';
@@ -270,3 +271,52 @@ test('BM25 precomputation, retrieveOfficialChunks, parseMarkdownSourceUrl (**Sou
   assert.equal(isValidFaqEntryId(1.5), false);
   assert.equal(isValidFaqEntryId('12'), false);
 });
+
+test('answerUplandQuestion accurately answers Uppie resident sale questions (including voice-to-text typos), blocks unrelated dumps, and uses zero-token fast path for approved community answers', async () => {
+  const client = createInMemoryClient();
+  const guildId = 'guild_uppies_test';
+
+  // 1. Exact & voice-to-text Uppie resident property sale question
+  const resExact = await answerUplandQuestion(
+    client,
+    guildId,
+    'If a property is sold and an Uppie resident is living there, does the resident Uppie stay with the original owner?'
+  );
+  assert.equal(resExact.answered, true);
+  assert.match(resExact.answer, /stays with its original owner/i);
+  assert.doesNotMatch(resExact.answer, /Asset Funneling/i);
+
+  const resTypo = await answerUplandQuestion(
+    client,
+    guildId,
+    'if a property is sold and a happy a resident of that property is living there does the resident puppy return to the original property owner'
+  );
+  assert.equal(resTypo.answered, true);
+  assert.match(resTypo.answer, /stays with its original owner/i);
+
+  // 2. Unrelated question sharing only generic words ('property', 'sold') must NOT dump FSA/Asset Funneling
+  const resUnrelated = await answerUplandQuestion(
+    client,
+    guildId,
+    'if a property is sold does a secret unicorn spawn on the moon'
+  );
+  assert.equal(resUnrelated.answered, false);
+  assert.doesNotMatch(resUnrelated.answer, /Asset Funneling|Fair Start Act/i);
+
+  // 3. Zero-token fast path for exact approved community FAQ match
+  await addCommunityAnswer(client, {
+    guildId,
+    question: 'When is our weekly Miami hunt?',
+    answer: 'Every Friday at 8 PM EST.',
+    authorId: 'staff_1',
+    authorTag: 'Staff#0001',
+    verified: true,
+    isStaffOrVeteran: true,
+  });
+
+  const fastRes = await answerUplandQuestion(client, guildId, 'When is our weekly Miami hunt?');
+  assert.equal(fastRes.answered, true);
+  assert.match(fastRes.answer, /Every Friday at 8 PM EST/);
+  assert.equal(fastRes.officialChunks.length, 0);
+});
+

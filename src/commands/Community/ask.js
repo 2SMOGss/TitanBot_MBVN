@@ -62,7 +62,7 @@ export function buildAskResponseEmbed(question, result) {
             .map((s) => `• [${s.title || 'Official Guide'}](${s.url})`)
             .join('\n');
         embed.addFields({
-            name: '📖 Official Upland Sources',
+            name: '📖 Sources',
             value: sourceLines.slice(0, 1024),
             inline: false,
         });
