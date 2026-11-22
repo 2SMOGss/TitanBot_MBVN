@@ -1,8 +1,6 @@
 # Cinnamon, Forgecraft, Clockworks, and Lantern Light Come to Upland | Upland
 
 **Source:** https://www.upland.me/events/cinnamon-forgecraft-clockworks-and-lantern-light-come-to-upland
-
----
 # Cinnamon, Forgecraft, Clockworks, and Lantern Light Come to Upland
 
 November 11, 2026

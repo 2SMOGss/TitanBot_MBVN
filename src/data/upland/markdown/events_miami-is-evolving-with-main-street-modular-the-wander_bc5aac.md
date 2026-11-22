@@ -1,8 +1,6 @@
 # Miami Is Evolving With Main Street Modular: The Wandering Magic Shop | Upland
 
 **Source:** https://www.upland.me/events/miami-is-evolving-with-main-street-modular-the-wandering-magic-shop
-
----
 # Miami Is Evolving With Main Street Modular: The Wandering Magic Shop
 
 November 20, 2026

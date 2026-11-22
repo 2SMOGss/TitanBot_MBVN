@@ -1,8 +1,6 @@
 # We’ve Updated How We Email You | Upland
 
 **Source:** https://www.upland.me/events/weve-updated-how-we-email-you
-
----
 # We’ve Updated How We Email You
 
 November 19, 2026

@@ -8,8 +8,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const MARKDOWN_DIR = path.join(__dirname, '../src/data/upland/markdown');
-const MAX_EVENT_PAGES = Number(process.env.MAX_EVENT_PAGES) || 35;
+const MAX_PAGES = Number(process.env.MAX_SCRAPE_PAGES) || 80;
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS) || 15000;
+
+const PRIORITY_URLS = [
+    'https://www.upland.me/learn/what-are-troves',
+    'https://www.upland.me/events/troves-expands-today-recipes-gold-banking-and-the-road-to-level-40',
+    'https://www.upland.me/events/troves-1-0-is-fully-launched-level-100-rare-genomes-and-more-to-discover',
+    'https://www.upland.me/events/uppie-quests-are-next-the-path-to-new-uppie-friends',
+];
 
 const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -28,14 +35,14 @@ function normalizeUrl(rawUrl) {
     }
 }
 
-function isEventUrl(url) {
+function isRelevantUplandUrl(url) {
     if (!url) return false;
     try {
         const parsed = new URL(url);
         const host = parsed.hostname.toLowerCase();
         if (host !== 'www.upland.me' && host !== 'upland.me') return false;
         const lowerPath = parsed.pathname.toLowerCase();
-        if (!lowerPath.startsWith('/events')) return false;
+        if (!lowerPath.startsWith('/events') && !lowerPath.startsWith('/learn')) return false;
         return !/\.(png|jpg|jpeg|gif|svg|pdf|zip|mp4|css|js|webp)$/i.test(lowerPath);
     } catch {
         return false;
@@ -112,8 +119,6 @@ function htmlToMarkdown(html, baseUrl) {
         '',
         `**Source:** ${baseUrl}`,
         '',
-        '---',
-        '',
     ].join('\n');
 
     return {
@@ -151,48 +156,67 @@ async function discoverEventUrls() {
 
     const addUrl = (raw) => {
         const norm = normalizeUrl(raw);
-        if (norm && isEventUrl(norm) && !seen.has(norm)) {
+        if (norm && isRelevantUplandUrl(norm) && !seen.has(norm)) {
             seen.add(norm);
             ordered.push(norm);
         }
     };
 
-    // 1. Seed from https://www.upland.me/events/ (featured / newest events appear first)
-    addUrl('https://www.upland.me/events/');
-    try {
-        const eventsHtml = await fetchText('https://www.upland.me/events/');
-        for (const match of eventsHtml.matchAll(/href=["']([^"'#?]+)["']/gi)) {
-            addUrl(match[1]);
-        }
-        console.log(`[Events Page] Discovered ${ordered.length} event URL(s) from /events/`);
-    } catch (err) {
-        console.warn(`[Events Page] Failed to fetch /events/: ${err.message}`);
+    for (const pUrl of PRIORITY_URLS) {
+        addUrl(pUrl);
     }
 
-    // 2. Also check sitemap.xml (and nested sitemaps if any)
+    // 1. Seed from https://www.upland.me/events/ and https://www.upland.me/learn/
+    for (const seed of ['https://www.upland.me/events/', 'https://www.upland.me/learn/']) {
+        addUrl(seed);
+        try {
+            const html = await fetchText(seed);
+            for (const match of html.matchAll(/href=["']([^"'#?]+)["']/gi)) {
+                addUrl(match[1]);
+            }
+            console.log(`[Seed] Discovered ${ordered.length} total URL(s) after ${seed}`);
+        } catch (err) {
+            console.warn(`[Seed] Failed to fetch ${seed}: ${err.message}`);
+        }
+    }
+
+    // 2. Also check sitemap.xml (prioritizing newest lastmod dates)
     try {
         const sitemapXml = await fetchText('https://www.upland.me/sitemap.xml');
-        const locs = [...sitemapXml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
-        for (const loc of locs) {
+        const urlEntries = [];
+
+        const extractEntries = (xml) => {
+            for (const block of xml.matchAll(/<url>([\s\S]*?)<\/url>/gi)) {
+                const loc = block[1].match(/<loc>\s*([^<\s]+)\s*<\/loc>/i)?.[1];
+                const lastmod = block[1].match(/<lastmod>\s*([^<\s]+)\s*<\/lastmod>/i)?.[1] || '';
+                if (loc && isRelevantUplandUrl(loc)) {
+                    urlEntries.push({ loc, lastmod });
+                }
+            }
+        };
+
+        extractEntries(sitemapXml);
+        for (const loc of [...sitemapXml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1])) {
             if (loc.endsWith('.xml')) {
                 try {
                     const childXml = await fetchText(loc);
-                    for (const childLoc of childXml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
-                        addUrl(childLoc[1]);
-                    }
+                    extractEntries(childXml);
                 } catch {
                     // ignore unreachable sub-sitemap
                 }
-            } else {
-                addUrl(loc);
             }
         }
-        console.log(`[Sitemap] Total unique /events/ URL(s) after sitemap: ${ordered.length}`);
+
+        urlEntries.sort((a, b) => b.lastmod.localeCompare(a.lastmod));
+        for (const entry of urlEntries) {
+            addUrl(entry.loc);
+        }
+        console.log(`[Sitemap] Total unique /events/ & /learn/ URL(s) after sitemap: ${ordered.length}`);
     } catch (err) {
         console.warn(`[Sitemap] Could not fetch sitemap.xml: ${err.message}`);
     }
 
-    return ordered.slice(0, MAX_EVENT_PAGES);
+    return ordered.slice(0, MAX_PAGES);
 }
 
 async function main() {

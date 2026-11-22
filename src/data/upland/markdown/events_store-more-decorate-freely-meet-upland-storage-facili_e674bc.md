@@ -1,8 +1,6 @@
 # Store More. Decorate Freely. Meet Upland Storage Facilities. | Upland
 
 **Source:** https://www.upland.me/events/store-more-decorate-freely-meet-upland-storage-facilities
-
----
 # Store More. Decorate Freely. Meet Upland Storage Facilities.
 
 November 17, 2026

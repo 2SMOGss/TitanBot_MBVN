@@ -1,10 +1,7 @@
 # Upland
-**Source URL:** https://www.upland.me/learn/what-is-upland
-**Scraped At:** 2026-11-16T14:47:54.451984+00:00
 
----
-
-**Summary:** Play, Earn, Connect & Rebuild the Real World.
+**Source:** https://www.upland.me/learn/what-is-upland
+Real-World City-Builder
 
 # What is Upland?
 
@@ -37,7 +34,9 @@ Players, called Architects, co‑author Upland’s world—organizing neighborho
 - **Trade.** Buy/sell virtual properties and items in the live player marketplace.
 - **Build.** Construct homes, showrooms, and shops, residential and service structures; plant trees, shape a district’s look and performance.
 - **Grow Life.** Plant, farm, and raise animals on your properties — then put Uppies to work automating their care and collecting the Troves they produce.
-- **Quest & Befriend.** Send Uppies on quests, craft Trove recipes, and befriend new Uppies to join your collection.
+
+- **Quest & Befriend. **Send Uppies on quests, craft Trove recipes, and befriend new Uppies to join your collection.
+
 - **Compete.** Join challenges, car races, design contests, and climb leaderboards.
 - **Create.** Design buildings, décor, signage, and experiences that define your area’s identity.
 - **Entrepreneurship.** Launch player‑run shops (Metaventures), provide services, manage logistics, and scale using in‑game resources like **UPX** and **Sparklet**.

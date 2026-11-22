@@ -1,8 +1,6 @@
 # Crepes, City Details, and Field Supplies | Upland
 
 **Source:** https://www.upland.me/events/crepes-city-details-and-field-supplies-come-to-upland
-
----
 # Crepes, City Details, and Field Supplies Come to Upland
 
 November 18, 2026

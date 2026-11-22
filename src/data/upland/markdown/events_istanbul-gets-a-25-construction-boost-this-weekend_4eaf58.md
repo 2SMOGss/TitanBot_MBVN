@@ -1,8 +1,6 @@
 # Istanbul Gets a 25% Construction Boost This Weekend | Upland
 
 **Source:** https://www.upland.me/events/istanbul-gets-a-25-construction-boost-this-weekend
-
----
 # Istanbul Gets a 25% Construction Boost This Weekend
 
 November 12, 2026

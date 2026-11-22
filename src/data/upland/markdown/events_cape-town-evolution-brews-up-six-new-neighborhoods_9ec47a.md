@@ -1,9 +1,6 @@
 # Cape Town Evolution Brews Up Six New Nei | Upland
-**Source URL:** https://www.upland.me/events/cape-town-evolution-brews-up-six-new-neighborhoods
-**Scraped At:** 2026-11-16T14:47:57.384429+00:00
 
----
-
+**Source:** https://www.upland.me/events/cape-town-evolution-brews-up-six-new-neighborhoods
 # Cape Town Evolution Brews Up Six New Neighborhoods
 
 November 06, 2026
@@ -21,9 +18,7 @@ Six new Cape Town neighborhoods are opening in this release:
 - Windermere
 - Townsend Estate
 - Sanddrift
-- Marconi Beam
-
-Together, these neighborhoods expand Cape Town’s playable footprint and give players more places to claim property, grow their portfolios, and shape the city’s next chapter.
+- Marconi Beam Together, these neighborhoods expand Cape Town’s playable footprint and give players more places to claim property, grow their portfolios, and shape the city’s next chapter.
 
 ### Collections
 
@@ -68,3 +63,5 @@ This signature structure is **exclusive to the Cape Town Deluxe Pack in this re
 ### Looking Ahead
 
 This Cape Town Evolution release is about **opening more of the city while building on a Collection players already know**. With **six new neighborhoods**, pack-level chances at the **Woodstock Standard Collection**, and Cafe Edition bringing the rhythm of Uppie cafe life to the modular lineup, players have more ways to shape their place in Cape Town.
+
+[jump in](https://discover.upland.me/hp-sign-up)[More events](https://www.upland.me/events)

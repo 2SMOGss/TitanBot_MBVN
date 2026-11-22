@@ -417,7 +417,11 @@ export function chunkMarkdownText(text, title, url, chunkSizeWords = CHUNK_SIZE_
 
     const flushChunk = (parasList, idx) => {
         const body = parasList.join('\n\n').trim();
-        if (!body || body.split(/\s+/).length < 10) return;
+        const bodyWithoutHeader = body
+            .replace(/^#\s+.*$/gm, '')
+            .replace(/^\*\*Source:\*\*\s*\S+.*$/gm, '')
+            .trim();
+        if (!body || bodyWithoutHeader.split(/\s+/).filter(Boolean).length < 12) return;
         const urlHash = crypto.createHash('md5').update(`${url}_${idx}`).digest('hex').slice(0, 10);
         chunks.push({
             id: `doc_${urlHash}_${idx}`,
@@ -1138,7 +1142,10 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
     const candidateBlocks = [];
     for (const chunk of relevantOfficial) {
         const rawText = chunk.text || '';
-        const body = rawText.replace(/^Document:.*?\nSource:.*?\n+/s, '').trim();
+        const body = rawText
+            .replace(/^Document:.*?\nSource:.*?\n+/s, '')
+            .replace(/^\*\*Source:\*\*\s*\S+.*\n*/gm, '')
+            .trim();
         const sections = body.split(/\n(?=#{1,3}\s|\*\*|- )/);
         for (const sec of sections) {
             const cleaned = sec.trim();

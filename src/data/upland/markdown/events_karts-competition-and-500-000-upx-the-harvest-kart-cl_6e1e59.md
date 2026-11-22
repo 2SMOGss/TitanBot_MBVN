@@ -1,8 +1,6 @@
 # Karts, Competition, and 500,000 UPX: The Harvest Kart Classic Is Here! | Upland
 
 **Source:** https://www.upland.me/events/karts-competition-and-500-000-upx-the-harvest-kart-classic-is-here
-
----
 # Karts, Competition, and 500,000 UPX: The Harvest Kart Classic Is Here!
 
 November 13, 2026

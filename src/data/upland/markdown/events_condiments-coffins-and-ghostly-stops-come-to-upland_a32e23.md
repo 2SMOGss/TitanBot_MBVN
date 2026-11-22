@@ -1,9 +1,6 @@
 # Condiments, Coffins, and Ghostly Stops Come to Upland | Upland
-**Source URL:** https://www.upland.me/events/condiments-coffins-and-ghostly-stops-come-to-upland
-**Scraped At:** 2026-11-16T14:47:58.946790+00:00
 
----
-
+**Source:** https://www.upland.me/events/condiments-coffins-and-ghostly-stops-come-to-upland
 # Condiments, Coffins, and Ghostly Stops Come to Upland
 
 October 28, 2026
@@ -49,3 +46,5 @@ Grim Hollow Tombstone Makers brings a macabre finishing touch to graveyard-inspi
 Whether **Uppies** are picking a favorite condiment, trading spooky stories, gathering for a ghost tour, or putting the final macabre touch on a haunted district, this week’s **Service Structures** give players four more ways to shape neighborhoods with personality. Collectors who want all four can grab the one-day **Service Structure Value Pack** before it disappears. Share the lineup with a returning friend or someone discovering Upland for the first time.
 
 Keep shaping the neighborhoods that bring **Uppies** home.
+
+[jump in](https://discover.upland.me/hp-sign-up)[More events](https://www.upland.me/events)

@@ -1,8 +1,6 @@
 # London Evolution Brings Rainy-Day Character With The Brolly Shoppe | Upland
 
 **Source:** https://www.upland.me/events/london-evolution-brings-rainy-day-character-with-the-brolly-shoppe
-
----
 # London Evolution Brings Rainy-Day Character With The Brolly Shoppe
 
 November 13, 2026

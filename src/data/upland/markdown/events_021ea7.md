@@ -1,8 +1,6 @@
 # Upland
 
 **Source:** https://www.upland.me/events
-
----
 Real-World City-Builder
 
 News & Events

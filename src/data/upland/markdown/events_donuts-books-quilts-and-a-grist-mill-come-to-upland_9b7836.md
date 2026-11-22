@@ -1,9 +1,6 @@
 # Donuts, Books, Quilts, and a Grist Mill Come to Upland | Upland
-**Source URL:** https://www.upland.me/events/donuts-books-quilts-and-a-grist-mill-come-to-upland
-**Scraped At:** 2026-11-16T14:47:57.900528+00:00
 
----
-
+**Source:** https://www.upland.me/events/donuts-books-quilts-and-a-grist-mill-come-to-upland
 # Donuts, Books, Quilts, and a Grist Mill Come to Upland
 
 November 04, 2026
@@ -49,3 +46,5 @@ The Willowbrook Grist Mill gives rural edges and heritage districts a sturdy cen
 Whether **Uppies** are choosing a donut, finding a new book, admiring a warm patchwork design, or gathering near the mill, this week’s **Service Structures** give players four more ways to shape neighborhoods with personality. Collectors who want all four can grab the one-day **Service Structure Value Pack** before it disappears. Share the lineup with a returning friend or someone discovering Upland for the first time.
 
 Keep shaping the neighborhoods that bring **Uppies** home.
+
+[jump in](https://discover.upland.me/hp-sign-up)[More events](https://www.upland.me/events)

@@ -1,8 +1,6 @@
 # All Eyes on Miami: Celebrate the Moment in Upland | Upland
 
 **Source:** https://www.upland.me/events/all-eyes-on-miami-celebrate-the-moment-in-upland
-
----
 # All Eyes on Miami: Celebrate the Moment in Upland
 
 November 19, 2026
