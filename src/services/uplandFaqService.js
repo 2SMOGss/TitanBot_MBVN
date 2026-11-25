@@ -1180,7 +1180,9 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
             .replace(/^Document:.*?\nSource:.*?\n+/s, '')
             .replace(/^\*\*Source:\*\*\s*\S+.*\n*/gm, '')
             .trim();
-        const sections = body.split(/\n(?=#{1,3}\s|\*\*|- )/);
+        const sections = /^#{1,3}\s/m.test(body)
+            ? body.split(/\n+(?=#{1,3}\s)/)
+            : body.split(/\n\n+/);
         for (const sec of sections) {
             const cleaned = sec.trim();
             if (cleaned.length >= 25) {
@@ -1217,7 +1219,7 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
         if (topScore >= 3.5) {
             const selected = [];
             let totalLen = 0;
-            const maxOfficialLen = 650;
+            const maxOfficialLen = 850;
 
             for (const item of scoredBlocks) {
                 if (item.score < Math.max(3.5, topScore * 0.55)) break;
@@ -1229,7 +1231,13 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
             }
 
             if (selected.length > 0) {
-                return selected.join('\n\n');
+                const combined = selected.join('\n\n');
+                if (combined.length <= 1200) {
+                    return combined;
+                }
+                const cut = combined.slice(0, 1200);
+                const lastBreak = cut.lastIndexOf('\n');
+                return (lastBreak > 400 ? cut.slice(0, lastBreak) : cut).trim();
             }
         }
     }
@@ -1241,7 +1249,7 @@ const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 const FALLBACK_GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
 let cachedWorkingGeminiModel = null;
 
-export async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputTokens = 220) {
+export async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputTokens = 800) {
     const apiKey = (process.env.GEMINI_API_KEY || '').trim();
     if (!apiKey || apiKey === 'your_gemini_api_key_here') {
         return null;
@@ -1304,7 +1312,9 @@ export async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputT
                 }
 
                 const data = await response.json();
-                const text = data?.candidates?.[0]?.content?.parts
+                const candidate = data?.candidates?.[0];
+                const text = candidate?.content?.parts
+                    ?.filter((p) => !p?.thought)
                     ?.map((p) => p.text || '')
                     .join('')
                     .trim();
@@ -1313,6 +1323,10 @@ export async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputT
                     cachedWorkingGeminiModel = model;
                     return text;
                 }
+
+                logger.warn(
+                    `Gemini API (${model}) returned empty text (finishReason=${candidate?.finishReason || 'unknown'})`
+                );
             } catch (error) {
                 logger.debug(`Gemini API request attempt failed (${error.message}), trying fallback.`);
             }
@@ -1453,7 +1467,7 @@ export async function answerUplandQuestion(client, guildId, question, topKOrOpti
         'Only start with `[UNANSWERED]` if it is server-specific or genuinely unknown.'
     );
 
-    const geminiText = await callGeminiPrompt(SYSTEM_PROMPT, userPromptParts.join('\n'), 220);
+    const geminiText = await callGeminiPrompt(SYSTEM_PROMPT, userPromptParts.join('\n'), 800);
     if (geminiText) {
         const parsed = parseUnansweredResponse(geminiText);
         if (parsed.isUnanswered) {
@@ -1532,7 +1546,7 @@ export async function verifyAndDistillCommunityAnswer(question, candidateMessage
         `<candidate_answer>${sanitizedCandidate}</candidate_answer>`,
     ].join('\n');
 
-    const aiVerdict = await callGeminiPrompt(verificationSystemPrompt, verificationUserPrompt, 350);
+    const aiVerdict = await callGeminiPrompt(verificationSystemPrompt, verificationUserPrompt, 800);
 
     if (aiVerdict) {
         if (aiVerdict.startsWith('REJECT') || !aiVerdict.startsWith('ACCEPT:')) {
