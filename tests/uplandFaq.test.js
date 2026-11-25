@@ -17,8 +17,10 @@ import {
   parseMarkdownSourceUrl,
   parseUnansweredResponse,
   answerUplandQuestion,
+  handlePassiveFaqMessage,
   VETERAN_ANSWER_THRESHOLD,
 } from '../src/services/uplandFaqService.js';
+import { buildAskResponseEmbed } from '../src/commands/Community/ask.js';
 import { isValidFaqEntryId } from '../src/interactions/buttons/faq/faq.js';
 
 function createInMemoryClient() {
@@ -319,4 +321,35 @@ test('answerUplandQuestion accurately answers Uppie resident sale questions (inc
   assert.match(fastRes.answer, /Every Friday at 8 PM EST/);
   assert.equal(fastRes.officialChunks.length, 0);
 });
+
+test('passive FAQ replies to single-term high-frequency Upland questions like "What is UPX used for?" without /ask', async () => {
+  passiveUserCooldowns.clear();
+  pendingChannelQuestions.clear();
+  const client = createInMemoryClient();
+  const guildId = 'guild_passive_upx_test';
+
+  const res = await answerUplandQuestion(client, guildId, 'What is UPX used for?');
+  assert.equal(res.answered, true);
+  assert.ok(res.officialChunks.length > 0);
+  assert.match(res.answer, /in-game utility token|currency of Upland/i);
+
+  let replyPayload = null;
+  const mockMessage = {
+    id: 'msg_upx_1',
+    content: 'What is UPX used for?',
+    author: { id: 'user_upx_1', tag: 'RobChic#0001', bot: false },
+    guild: { id: guildId },
+    channel: { id: 'chan_questions_1' },
+    async reply(payload) {
+      replyPayload = payload;
+      return { id: 'bot_reply_upx_1' };
+    },
+  };
+
+  const handled = await handlePassiveFaqMessage(mockMessage, client, buildAskResponseEmbed, { prefix: '!' });
+  assert.equal(handled, true);
+  assert.ok(replyPayload);
+  assert.ok(Array.isArray(replyPayload.embeds) && replyPayload.embeds.length === 1);
+});
+
 

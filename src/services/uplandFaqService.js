@@ -351,6 +351,13 @@ function buildBm25Index(chunks) {
     for (let idx = 0; idx < N; idx++) {
         const chunk = chunks[idx];
         const tokens = tokenize(`${chunk.title || ''} ${chunk.text || ''}`).map(normalizeToken);
+        const headingLines = String(chunk.text || '')
+            .split('\n')
+            .filter((line) => /^#{1,3}\s+|^\*\*[^*]{2,120}\*\*\s*$/.test(line.trim()));
+        const headingText = `${chunk.title || ''} ${headingLines.join(' ')}`.toLowerCase();
+        const headingTokens = new Set(
+            tokenize(headingText).map(normalizeToken)
+        );
         const dl = tokens.length;
         totalLen += dl;
 
@@ -365,6 +372,8 @@ function buildBm25Index(chunks) {
         docs.push({
             chunk,
             tokens,
+            headingText,
+            headingTokens,
             tf,
             dl,
         });
@@ -530,8 +539,10 @@ export function retrieveOfficialChunks(question, topK = TOP_K_CHUNKS) {
     const b = 0.75;
     const scored = [];
 
+    const isDefinitionalQuery = /^\s*(what(?:'s|s|\s+is|\s+are)\b|explain\b|define\b)/i.test(String(question || ''));
+
     for (let idx = 0; idx < N; idx++) {
-        const { chunk, tf, dl } = docs[idx];
+        const { chunk, headingText, headingTokens, tf, dl } = docs[idx];
 
         let score = 0;
         let matchedTerms = 0;
@@ -540,13 +551,27 @@ export function retrieveOfficialChunks(question, topK = TOP_K_CHUNKS) {
             const freq = tf.get(term) || 0;
             if (!freq) continue;
             matchedTerms += 1;
-            if (!GENERIC_BACKGROUND_TERMS.has(term)) {
+            const isGeneric = GENERIC_BACKGROUND_TERMS.has(term);
+            if (!isGeneric) {
                 matchedSpecific += 1;
             }
             const nQ = df.get(term) || 0;
             const idf = Math.log((N - nQ + 0.5) / (nQ + 0.5) + 1.0);
             const denom = freq + k1 * (1 - b + b * (dl / Math.max(avgDocLen, 1.0)));
             score += idf * ((freq * (k1 + 1)) / denom);
+            if (headingTokens?.has(term)) {
+                score += isGeneric ? 0.5 : 1.25;
+                if (isDefinitionalQuery && !isGeneric && headingText && new RegExp(`\\bwhat\\s+(?:is|are)\\s+${term}\\b`, 'i').test(headingText)) {
+                    score += 0.75;
+                }
+            }
+        }
+
+        if (score > 0 && (specificTokens.length === 0 || matchedSpecific > 0)) {
+            const url = String(chunk.url || '').toLowerCase();
+            if (url.includes('/learn') || url.includes('upland-guide.com')) {
+                score += 0.2;
+            }
         }
 
         const coverage = matchedTerms / searchTokens.length;
@@ -566,6 +591,15 @@ export function retrieveOfficialChunks(question, topK = TOP_K_CHUNKS) {
 
     scored.sort((a, bItem) => bItem.score - a.score);
     return scored.slice(0, topK);
+}
+
+function isStrongOfficialChunk(chunk) {
+    if (!chunk) return false;
+    const hasCoverage = chunk.coverage === undefined || chunk.coverage >= 0.55;
+    const hasSpecificCoverage = chunk.specificCoverage === undefined || chunk.specificCoverage >= 0.4;
+    if (!hasCoverage || !hasSpecificCoverage) return false;
+    if (chunk.score >= 2.2) return true;
+    return chunk.coverage === 1 && chunk.specificCoverage === 1 && chunk.score >= 1.5;
 }
 
 async function ensureGuildRow(pool, guildId) {
@@ -1136,7 +1170,7 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
     const qWords = normalizeSearchTokens(question);
     const specificWords = qWords.filter((w) => !GENERIC_BACKGROUND_TERMS.has(w));
     const relevantOfficial = officialChunks
-        .filter((c) => c.score >= 2.2 && (c.specificCoverage === undefined || c.specificCoverage >= 0.4))
+        .filter((c) => isStrongOfficialChunk(c))
         .slice(0, 2);
 
     const candidateBlocks = [];
@@ -1336,7 +1370,7 @@ export async function answerUplandQuestion(client, guildId, question, topKOrOpti
     }
 
     const strongOfficial = officialChunks
-        .filter((c) => c.score >= 2.2 && c.coverage >= 0.55 && (c.specificCoverage === undefined || c.specificCoverage >= 0.4))
+        .filter((c) => isStrongOfficialChunk(c))
         .slice(0, 2);
 
     const hasKnowledgeMatch = communityMatches.length > 0 || strongOfficial.length > 0;
