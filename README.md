@@ -47,7 +47,7 @@ flowchart LR
 
     subgraph Infra["Managed Cloud Infrastructure"]
         PG[("PostgreSQL 17 (Railway / Supabase)<br/>19 Structured Tables<br/>(Auto-Migrated & Indexed)")]
-        GEMINI["Google Gemini API<br/>(gemini-2.5-flash)"]
+        GEMINI["Google Gemini API<br/>(gemini-3.8-flash)"]
         LAVA["Lavalink v4 SSL Nodes<br/>(lavalink/nodes.json)"]
     end
 
@@ -173,7 +173,7 @@ Railway automatically builds the `Dockerfile`, runs health checks against `/heal
      POSTGRES_SSL=true
      AUTO_MIGRATE=true
      GEMINI_API_KEY=your_google_gemini_api_key
-     GEMINI_MODEL=gemini-2.5-flash
+     GEMINI_MODEL=gemini-3.8-flash
      LOG_LEVEL=warn
      PORT=3000
      ```
@@ -265,7 +265,7 @@ Once the bot is online in your Discord server:
 | `CLIENT_ID` | **Yes** | — | Discord Application ID used to register global slash commands. |
 | `GUILD_ID` | **Yes** | — | Primary Discord Server ID. |
 | `GEMINI_API_KEY` | Recommended | `""` | Google Gemini API key for `/ask` RAG synthesis & passive chat distillation (falls back to local BM25 extraction if unset). |
-| `GEMINI_MODEL` | No | `gemini-2.5-flash` | Gemini model identifier used by `uplandFaqService.js`. |
+| `GEMINI_MODEL` | No | `gemini-3.8-flash` | Gemini model identifier used by `uplandFaqService.js`. |
 | `OWNER_IDS` | No | `""` | Comma-separated Discord User IDs granted bot owner access. |
 | `POSTGRES_URL` | **Yes (Prod)** | — | Full PostgreSQL connection string (`postgresql://user:pass@host:5432/db`). |
 | `DATABASE_URL` | No | `POSTGRES_URL` | Alias for `POSTGRES_URL` used by Railway/Render. |

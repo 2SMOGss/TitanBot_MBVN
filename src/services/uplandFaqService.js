@@ -1237,13 +1237,23 @@ export function extractGroundedAnswer(question, officialChunks, communityMatches
     return null;
 }
 
+const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+const FALLBACK_GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+let cachedWorkingGeminiModel = null;
+
 export async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputTokens = 220) {
     const apiKey = (process.env.GEMINI_API_KEY || '').trim();
     if (!apiKey || apiKey === 'your_gemini_api_key_here') {
         return null;
     }
 
-    const model = (process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
+    const configuredModel = (process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL).trim();
+    const candidateModels = [...new Set([
+        ...(cachedWorkingGeminiModel ? [cachedWorkingGeminiModel] : []),
+        configuredModel,
+        ...FALLBACK_GEMINI_MODELS,
+    ].filter(Boolean))];
+
     const payload = {
         systemInstruction: {
             parts: [{ text: systemInstruction }],
@@ -1260,44 +1270,56 @@ export async function callGeminiPrompt(systemInstruction, userPrompt, maxOutputT
         },
     };
 
-    const endpoints = apiKey.startsWith('AQ.')
-        ? [
-            `https://aiplatform.googleapis.com/v1beta1/publishers/google/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-        ]
-        : [
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-        ];
+    for (const model of candidateModels) {
+        const endpoints = apiKey.startsWith('AQ.')
+            ? [
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+                `https://aiplatform.googleapis.com/v1beta1/publishers/google/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            ]
+            : [
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            ];
 
-    for (const url of endpoints) {
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(12000),
-            });
+        let shouldTryNextModel = false;
+        for (const url of endpoints) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(12000),
+                });
 
-            if (!response.ok) {
-                const errText = await response.text().catch(() => '');
-                const summary = String(errText || '').replace(/\s+/g, ' ').trim().slice(0, 200);
-                logger.warn(
-                    `Gemini API returned non-2xx HTTP ${response.status} (${response.statusText || 'Error'})${summary ? `: ${summary}` : ''}`
-                );
-                continue;
+                if (!response.ok) {
+                    const errText = await response.text().catch(() => '');
+                    const summary = String(errText || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+                    logger.warn(
+                        `Gemini API (${model}) returned non-2xx HTTP ${response.status} (${response.statusText || 'Error'})${summary ? `: ${summary}` : ''}`
+                    );
+                    if (response.status === 404) {
+                        shouldTryNextModel = true;
+                        break;
+                    }
+                    continue;
+                }
+
+                const data = await response.json();
+                const text = data?.candidates?.[0]?.content?.parts
+                    ?.map((p) => p.text || '')
+                    .join('')
+                    .trim();
+
+                if (text) {
+                    cachedWorkingGeminiModel = model;
+                    return text;
+                }
+            } catch (error) {
+                logger.debug(`Gemini API request attempt failed (${error.message}), trying fallback.`);
             }
+        }
 
-            const data = await response.json();
-            const text = data?.candidates?.[0]?.content?.parts
-                ?.map((p) => p.text || '')
-                .join('')
-                .trim();
-
-            if (text) {
-                return text;
-            }
-        } catch (error) {
-            logger.debug(`Gemini API request attempt failed (${error.message}), trying fallback.`);
+        if (!shouldTryNextModel) {
+            break;
         }
     }
 
